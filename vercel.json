@@ -52,9 +52,6 @@
       ]
     }
   ],
-  "functions": {
-    "server.js": {
-      "maxDuration": 30
-    }
-  }
+  "regions": ["sin1"],  // Singapore region untuk latency yang lebih baik
+  "maxDuration": 30     // Maksimal durasi function (dalam detik)
 }
