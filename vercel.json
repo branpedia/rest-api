@@ -1,33 +1,15 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "server.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "public/**/*",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "server.js",
-      "methods": ["GET", "POST", "OPTIONS"]
-    },
-    {
-      "src": "/(.*)",
-      "dest": "public/$1"
-    }
-  ],
   "headers": [
     {
-      "source": "/api/(.*)",
+      "source": "/(.*)",
       "headers": [
         {
-          "key": "Access-Control-Allow-Credentials",
-          "value": "true"
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
         },
         {
           "key": "Access-Control-Allow-Origin",
@@ -40,18 +22,38 @@
         {
           "key": "Access-Control-Allow-Headers",
           "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version"
-        },
-        {
-          "key": "X-Frame-Options",
-          "value": "DENY"
-        },
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
         }
       ]
     }
   ],
-  "regions": ["sin1"],  // Singapore region untuk latency yang lebih baik
-  "maxDuration": 30     // Maksimal durasi function (dalam detik)
+  "rewrites": [
+    {
+      "source": "/api/mediafire",
+      "destination": "/api/mediafire.js"
+    },
+    {
+      "source": "/api/youtube",
+      "destination": "/api/youtube.js"
+    },
+    {
+      "source": "/api/instagram",
+      "destination": "/api/instagram.js"
+    },
+    {
+      "source": "/api/tiktok",
+      "destination": "/api/tiktok.js"
+    },
+    {
+      "source": "/api/stats",
+      "destination": "/api/stats.js"
+    },
+    {
+      "source": "/api/health",
+      "destination": "/api/health.js"
+    },
+    {
+      "source": "/api",
+      "destination": "/api/index.js"
+    }
+  ]
 }
