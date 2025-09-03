@@ -85,7 +85,7 @@ function setupCopyResultButtons() {
             
             navigator.clipboard.writeText(jsonContent).then(() => {
                 const originalText = this.innerHTML;
-                this.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                this.innerHTML = '<极市i class="fas fa-check"></i> Copied!';
                 setTimeout(() => {
                     this.innerHTML = '<i class="fas fa-copy"></i> Copy Result';
                 }, 2000);
@@ -156,7 +156,7 @@ function testEndpoint(inputId, endpoint) {
             
             // Update response dengan hasil real
             responseElement.innerHTML = `
-                <极市 class="response-header">
+                <div class="response-header">
                     <span class="response-title">Response</span>
                     <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                 </div>
@@ -192,7 +192,7 @@ const themeToggle = document.getElementById('themeToggle');
 themeToggle.addEventListener('click', function() {
     document.body.classList.toggle('light-mode');
     if (document.body.classList.contains('light-mode')) {
-        themeToggle.innerHTML = '<i class="fas fa-s极市n"></i>';
+        themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
         document.body.style.background = 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)';
         document.body.style.color = '#1e293b';
     } else {
@@ -211,7 +211,7 @@ const observerOptions = {
     rootMargin: '0px 0px -50px 0px'
 };
 
-const observer = new IntersectionObserver((entries极市) => {
+const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
             entry.target.style.animation = 'fadeInUp 0.6s ease forwards';
