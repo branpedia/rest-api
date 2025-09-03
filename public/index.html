@@ -61,7 +61,7 @@
                     <p>Ekstrak link download dari MediaFire</p>
                 </div>
                 <div class="stat-card">
-                    <h3>YouTube Downloader</极市h3>
+                    <h3>YouTube Downloader</h3>
                     <div class="number">API</div>
                     <p>Download video YouTube dengan mudah</p>
                 </div>
@@ -84,18 +84,6 @@
                     <span class="endpoint-url">/api/mediafire?url=https://www.mediafire.com/...</span>
                     <button class="copy-btn" data-endpoint="/api/mediafire?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
                 </div>
-                
-                <!-- Input URL -->
-                <div class="input-container">
-                    <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                    <div class="input-group">
-                        <input type="text" id="testUrlHome" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlHome', '/api/mediafire')">
-                            <i class="fas fa-bolt"></i> Test Endpoint
-                        </button>
-                    </div>
-                </div>
-                
                 <div class="response">
                     <div class="response-header">
                         <span class="response-title">Response</span>
@@ -108,10 +96,11 @@
     "size": "6.78MB",
     "extension": "zip",
     "uploaded": "2024-02-22 07:29:23",
-    "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-极市+MD.zip"
+    "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
   }
 }</pre>
                 </div>
+                <button class="try-btn" data-endpoint="/api/mediafire"><i class="fas fa-bolt"></i> Test Endpoint</button>
             </div>
         </div>
 
@@ -149,18 +138,6 @@
                     <span class="endpoint-url">/api/mediafire?url=</span>
                     <button class="copy-btn" data-endpoint="/api/mediafire?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
                 </div>
-                
-                <!-- Input URL -->
-                <div class="input-container">
-                    <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                    <div class="input-group">
-                        <input type="text" id="testUrlDashboard" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlDashboard', '/api/mediafire')">
-                            <i class="fas fa-bolt"></i> Test Endpoint
-                        </button>
-                    </div>
-                </div>
-                
                 <div class="response">
                     <div class="response-header">
                         <span class="response-title">Response</span>
@@ -177,6 +154,7 @@
   }
 }</pre>
                 </div>
+                <button class="try-btn" data-endpoint="/api/mediafire"><i class="fas fa-bolt"></i> Test Endpoint</button>
             </div>
         </div>
 
@@ -192,7 +170,7 @@
             
             <h3>Endpoint</h3>
             <div class="endpoint">
-                <极市div class="endpoint-header">
+                <div class="endpoint-header">
                     <span class="endpoint-method">GET</span>
                     <span class="endpoint-url">/api/mediafire?url={mediafire_url}</span>
                     <button class="copy-btn" data-endpoint="/api/mediafire?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
@@ -214,7 +192,7 @@ curl -X 'GET' \
             </div>
             
             <h3>Response</h3>
-            <p>Response JSON akan berisi:</极市p>
+            <p>Response JSON akan berisi:</p>
             <div class="endpoint">
                 <div class="response">
                     <div class="response-header">
@@ -232,17 +210,7 @@ curl -X 'GET' \
   }
 }</pre>
                 </div>
-                
-                <!-- Input URL untuk Test -->
-                <div class="input-container">
-                    <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                    <div class="input-group">
-                        <input type="text" id="testUrlDocs" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlDocs', '/api/mediafire')">
-                            <i class="fas fa-bolt"></i> Test Endpoint
-                        </button>
-                    </div>
-                </div>
+                <button class="try-btn" data-endpoint="/api/mediafire"><i class="fas fa-bolt"></i> Test Endpoint</button>
             </div>
             
             <h3>Error Handling</h3>
@@ -272,18 +240,6 @@ curl -X 'GET' \
                     <span class="endpoint-url">/api/mediafire?url={mediafire_url}</span>
                     <button class="copy-btn" data-endpoint="/api/mediafire?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
                 </div>
-                
-                <!-- Input URL -->
-                <div class="input-container">
-                    <div class="parameter__name required极市">url<span>&nbsp;*</span></div>
-                    <div class="input-group">
-                        <input type="text" id="testUrlMediafire" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlMediafire', '/api/mediafire')">
-                            <i class="fas fa-bolt"></i> Test Endpoint
-                        </button>
-                    </div>
-                </div>
-                
                 <div class="response">
                     <div class="response-header">
                         <span class="response-title">Response</span>
@@ -300,6 +256,7 @@ curl -X 'GET' \
   }
 }</pre>
                 </div>
+                <button class="try-btn" data-endpoint="/api/mediafire"><i class="fas fa-bolt"></i> Test Endpoint</button>
             </div>
             
             <div class="endpoint">
@@ -308,18 +265,6 @@ curl -X 'GET' \
                     <span class="endpoint-url">/api/youtube?url={youtube_url}</span>
                     <button class="copy-btn" data-endpoint="/api/youtube?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
                 </div>
-                
-                <!-- Input URL untuk YouTube -->
-                <div class="input-container">
-                    <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                    <div class="input-group">
-                        <input type="text" id="testUrlYoutube" placeholder="https://www.youtube.com/watch?v=abc123" class极市="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlYoutube', '/api/youtube')">
-                            <i class="fas fa-bolt"></极市i> Test Endpoint
-                        </button>
-                    </div>
-                </div>
-                
                 <div class="response">
                     <div class="response-header">
                         <span class="response-title">Response</span>
@@ -335,6 +280,7 @@ curl -X 'GET' \
   }
 }</pre>
                 </div>
+                <button class="try-btn" data-endpoint="/api/youtube"><i class="fas fa-bolt"></i> Test Endpoint</button>
             </div>
             
             <h3>AI Services</h3>
@@ -344,18 +290,6 @@ curl -X 'GET' \
                     <span class="endpoint-url">/api/ai/toanime</span>
                     <button class="copy-btn" data-endpoint="/api/ai/toanime"><i class="fas fa-copy"></i> Copy Endpoint</button>
                 </div>
-                
-                <!-- Input untuk AI Service -->
-                <div class="input-container">
-                    <div class="parameter__name">image_url (optional)</div>
-                    <div class="input-group">
-                        <input type="text" id="testUrlAnime" placeholder="https://example.com/image.jpg" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlAnime', '/api/ai/toanime')">
-                            <i class="fas fa-bolt"></i> Test Endpoint
-                        </button>
-                    </div>
-                </div>
-                
                 <div class="response">
                     <div class="response-header">
                         <span class="response-title">Response</span>
@@ -369,6 +303,7 @@ curl -X 'GET' \
   }
 }</pre>
                 </div>
+                <button class="try-btn" data-endpoint="/api/ai/toanime"><i class="fas fa-bolt"></i> Test Endpoint</button>
             </div>
         </div>
 
