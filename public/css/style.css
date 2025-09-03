@@ -42,7 +42,7 @@ body {
     left: 0;
     right: 0;
     z-index: 1000;
-    box-shadow: 极市 4px 20px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -74,7 +74,7 @@ body {
     font-size: 1.1rem;
     display: flex;
     align-items: center;
-   极市 justify-content: center;
+    justify-content: center;
     transition: var(--transition);
 }
 
@@ -106,7 +106,7 @@ body {
 .sidebar-header {
     padding: 20px;
     text-align: center;
-    border-bottom: 1px solid rgba(255, 255, 255, 极市.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .sidebar-header h3 {
@@ -198,7 +198,7 @@ body {
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
     transform: translateY(20px);
     opacity: 0;
-    transition: opacity 0.5s ease, transform 极市.5s ease;
+    transition: opacity 0.5s ease, transform 0.5s ease;
 }
 
 .section.active {
@@ -228,6 +228,13 @@ h3 {
     color: var(--light);
     font-weight: 500;
     font-size: 1.2rem;
+}
+
+h4 {
+    margin: 15px 0 10px;
+    color: var(--primary-light);
+    font-weight: 600;
+    font-size: 1.1rem;
 }
 
 p {
@@ -268,18 +275,18 @@ p {
     align-items: center;
     margin-bottom: 12px;
     flex-wrap: wrap;
-    gap: 极市0px;
+    gap: 10px;
 }
 
 .endpoint-method {
     display: inline-block;
     padding: 6px 12px;
-    background: var(--极市primary);
+    background: var(--primary);
     color: white;
     border-radius: 4px;
     font-weight: 600;
     margin-right: 8px;
-   极市 min-width: 70px;
+    min-width: 70px;
     text-align: center;
     font-size: 0.85rem;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -361,13 +368,19 @@ p {
     background: var(--primary);
 }
 
-/* Input Container Styles */
-.input-container {
-    margin: 15px 0;
-    padding: 15px;
-    background: rgba(15, 23, 42, 0.3);
+/* Test Form Styles */
+.test-form {
+    margin-top: 20px;
+    padding: 20px;
+    background: rgba(15, 23, 42, 0.5);
     border-radius: 8px;
-    border-left: 3px solid var(--primary);
+    border-left: 4px solid var(--primary);
+}
+
+.test-form h4 {
+    color: var(--primary-light);
+    margin-bottom: 15px;
+    font-size: 1.1rem;
 }
 
 .parameter__name {
@@ -384,11 +397,12 @@ p {
 .input-group {
     display: flex;
     gap: 10px;
+    margin-bottom: 15px;
 }
 
 .url-input {
     flex: 1;
-    padding: 10px 12px;
+    padding: 12px;
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 6px;
     background: rgba(255, 255, 255, 0.1);
@@ -408,18 +422,17 @@ p {
 }
 
 .test-btn {
-    padding: 10px 16px;
+    padding: 12px 20px;
     background: linear-gradient(to right, var(--primary), var(--primary-dark));
     color: white;
     border: none;
     border-radius: 6px;
     cursor: pointer;
-    font-weight: 500;
+    font-weight: 600;
     transition: var(--transition);
     display: flex;
     align-items: center;
-    gap: 6px;
-    white-space: nowrap;
+    gap: 8px;
 }
 
 .test-btn:hover {
@@ -431,6 +444,75 @@ p {
     background: var(--secondary);
     cursor: not-allowed;
     transform: none;
+}
+
+.test-result {
+    padding: 15px;
+    background: #1a243a;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-family: 'Fira Code', monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.test-result.success {
+    border-left: 4px solid var(--success);
+}
+
+.test-result.error {
+    border-left: 4px solid var(--danger);
+}
+
+.test-result .result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.test-result .result-title {
+    font-weight: 600;
+    color: var(--primary-light);
+}
+
+.test-result .copy-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--light);
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.test-result .copy-btn:hover {
+    background: var(--primary);
+}
+
+.test-result pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* Loading spinner */
+.loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: var(--primary-light);
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
 
 /* Dashboard Cards */
@@ -449,7 +531,7 @@ p {
     transition: var(--transition);
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-    position:极市 relative;
+    position: relative;
     overflow: hidden;
 }
 
@@ -520,7 +602,7 @@ p {
 }
 
 .hero p {
-    font-size: 极市rem;
+    font-size: 1rem;
     max-width: 800px;
     margin: 0 auto 20px;
     opacity: 0.9;
@@ -555,7 +637,7 @@ p {
 
 .btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px极市 rgba(79, 70, 229, 0.5);
+    box-shadow: 0 5px 15px rgba(79, 70, 229, 0.5);
 }
 
 .btn-outline {
@@ -636,21 +718,6 @@ p {
     transform: scale(1.05);
 }
 
-/* Loading spinner */
-.loading-spinner {
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    border: 3px solid rgba(255, 255, 255, 0.3);
-    border-radius: 50%;
-    border-top-color: var(--primary-light);
-    animation: spin 1s ease-in-out infinite;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
 /* Responsive Design */
 @media (min-width: 992px) {
     .sidebar {
@@ -710,7 +777,7 @@ p {
 }
 
 /* Animation for section loading */
-@keyframes fadeIn极市Up {
+@keyframes fadeInUp {
     from {
         opacity: 0;
         transform: translateY(20px);
