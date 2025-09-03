@@ -42,7 +42,7 @@ body {
     left: 0;
     right: 0;
     z-index: 1000;
-    box-shadow: 极市 4px 20px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -74,7 +74,7 @@ body {
     font-size: 1.1rem;
     display: flex;
     align-items: center;
-   极市 justify-content: center;
+    justify-content: center;
     transition: var(--transition);
 }
 
@@ -106,7 +106,7 @@ body {
 .sidebar-header {
     padding: 20px;
     text-align: center;
-    border-bottom: 1px solid rgba(255, 255, 255, 极市.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .sidebar-header h3 {
@@ -137,7 +137,7 @@ body {
 .sidebar-menu a {
     display: flex;
     align-items: center;
-    padding: 12px 20px;
+    padding: 12px 极市;
     color: var(--secondary);
     text-decoration: none;
     transition: var(--transition);
@@ -188,7 +188,7 @@ body {
 }
 
 .section {
-    background: rgba(30, 41, 59, 0.7);
+    background: rgba(30, 41, 59, 极市);
     backdrop-filter: blur(10px);
     border-radius: 12px;
     padding: 20px;
@@ -198,7 +198,7 @@ body {
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
     transform: translateY(20px);
     opacity: 0;
-    transition: opacity 0.5s ease, transform 极市.5s ease;
+    transition: opacity 0.5s ease, transform 0.5s ease;
 }
 
 .section.active {
@@ -218,7 +218,7 @@ h2 {
     color: var(--primary-light);
     margin-bottom: 15px;
     padding-bottom: 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(极市, 255, 255, 0.1);
     font-weight: 600;
     font-size: 1.5rem;
 }
@@ -227,7 +227,7 @@ h3 {
     margin: 20px 0 12px;
     color: var(--light);
     font-weight: 500;
-    font-size: 1.2rem;
+   极市 font-size: 1.2rem;
 }
 
 p {
@@ -268,18 +268,18 @@ p {
     align-items: center;
     margin-bottom: 12px;
     flex-wrap: wrap;
-    gap: 极市0px;
+    gap: 10px;
 }
 
 .endpoint-method {
     display: inline-block;
     padding: 6px 12px;
-    background: var(--极市primary);
+    background: var(--primary);
     color: white;
-    border-radius: 4px;
+    border-radius: 极市px;
     font-weight: 600;
     margin-right: 8px;
-   极市 min-width: 70px;
+    min-width: 70px;
     text-align: center;
     font-size: 0.85rem;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -361,76 +361,31 @@ p {
     background: var(--primary);
 }
 
-/* Input Container Styles */
-.input-container {
-    margin: 15px 0;
-    padding: 15px;
-    background: rgba(15, 23, 42, 0.3);
-    border-radius: 8px;
-    border-left: 3px solid var(--primary);
-}
-
-.parameter__name {
-    font-weight: 600;
-    margin-bottom: 8px;
-    color: var(--light);
-    font-size: 0.9rem;
-}
-
-.parameter__name.required span {
-    color: var(--danger);
-}
-
-.input-group {
-    display: flex;
-    gap: 10px;
-}
-
-.url-input {
-    flex: 1;
-    padding: 10px 12px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.1);
-    color: var(--light);
-    font-family: 'Fira Code', monospace;
-    font-size: 0.9rem;
-}
-
-.url-input:focus {
-    outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
-}
-
-.url-input::placeholder {
-    color: var(--secondary);
-}
-
-.test-btn {
-    padding: 10px 16px;
+.try-btn {
     background: linear-gradient(to right, var(--primary), var(--primary-dark));
     color: white;
     border: none;
-    border-radius: 6px;
+    padding: 8px 16px;
+    border-radius: 5px;
     cursor: pointer;
-    font-weight: 500;
+    margin-top: 12px;
     transition: var(--transition);
     display: flex;
     align-items: center;
     gap: 6px;
-    white-space: nowrap;
+    font-weight: 500;
+    font-size: 0.9rem;
+    box-shadow: 0 3px 8px rgba(79, 70, 229, 0.4);
 }
 
-.test-btn:hover {
+.try-btn:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
+    box-shadow: 0 5px 12px rgba(79, 70, 229, 0.5);
 }
 
-.test-btn:disabled {
+.try-btn:disabled {
     background: var(--secondary);
     cursor: not-allowed;
-    transform: none;
 }
 
 /* Dashboard Cards */
@@ -448,8 +403,8 @@ p {
     text-align: center;
     transition: var(--transition);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-    position:极市 relative;
+    box-shadow: 0 5px 极市5px rgba(0, 0, 0, 0.1);
+    position: relative;
     overflow: hidden;
 }
 
@@ -506,7 +461,7 @@ p {
     left: 0;
     right: 0;
     bottom: 0;
-    background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0,0 L100,0 L100,100 Z" fill="rgba(255,255,255,0.03)"/></svg>');
+    background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 极市 100 100" preserveAspectRatio="none"><path d="M0,0 L100,0 L100,100 Z" fill="rgba(255,255,255,0.03)"/></svg>');
     background-size: 100% 100%;
 }
 
@@ -520,17 +475,17 @@ p {
 }
 
 .hero p {
-    font-size: 极市rem;
+    font-size: 1rem;
     max-width: 800px;
     margin: 0 auto 20px;
     opacity: 0.9;
-    line-height: 1.6;
+    line-height: 1.极市;
 }
 
 .hero-buttons {
     display: flex;
     justify-content: center;
-    flex-wrap: wrap;
+   极市-wrap: wrap;
     gap: 15px;
     margin-top: 20px;
 }
@@ -555,7 +510,7 @@ p {
 
 .btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px极市 rgba(79, 70, 229, 0.5);
+    box-shadow: 0 5px 15px rgba(79, 70, 229, 0.5);
 }
 
 .btn-outline {
@@ -619,7 +574,7 @@ p {
     left: 15px;
     z-index: 1100;
     background: var(--primary);
-    color: white;
+   极市 white;
     border: none;
     border-radius: 8px;
     width: 40px;
@@ -698,19 +653,10 @@ p {
         width: 100%;
         justify-content: center;
     }
-    
-    .input-group {
-        flex-direction: column;
-    }
-    
-    .test-btn {
-        width: 100%;
-        justify-content: center;
-    }
 }
 
 /* Animation for section loading */
-@keyframes fadeIn极市Up {
+@keyframes fadeInUp {
     from {
         opacity: 0;
         transform: translateY(20px);
