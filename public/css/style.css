@@ -230,6 +230,13 @@ h3 {
     font-size: 1.2rem;
 }
 
+h4 {
+    margin: 15px 0 10px;
+    color: var(--primary-light);
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
 p {
     margin-bottom: 15px;
     line-height: 1.6;
@@ -361,26 +368,151 @@ p {
     background: var(--primary);
 }
 
-.try-btn {
+/* Test Form Styles */
+.test-form {
+    margin-top: 20px;
+    padding: 20px;
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 8px;
+    border-left: 4px solid var(--primary);
+}
+
+.test-form h4 {
+    color: var(--primary-light);
+    margin-bottom: 15px;
+    font-size: 1.1rem;
+}
+
+.parameter__name {
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--light);
+    font-size: 0.9rem;
+}
+
+.parameter__name.required span {
+    color: var(--danger);
+}
+
+.input-group {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.url-input {
+    flex: 1;
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--light);
+    font-family: 'Fira Code', monospace;
+    font-size: 0.9rem;
+}
+
+.url-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.url-input::placeholder {
+    color: var(--secondary);
+}
+
+.test-btn {
+    padding: 12px 20px;
     background: linear-gradient(to right, var(--primary), var(--primary-dark));
     color: white;
     border: none;
-    padding: 8px 16px;
-    border-radius: 5px;
+    border-radius: 6px;
     cursor: pointer;
-    margin-top: 12px;
+    font-weight: 600;
     transition: var(--transition);
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-weight: 500;
-    font-size: 0.9rem;
-    box-shadow: 0 3px 8px rgba(79, 70, 229, 0.4);
+    gap: 8px;
 }
 
-.try-btn:hover {
+.test-btn:hover {
     transform: translateY(-1px);
-    box-shadow: 0 5px 12px rgba(79, 70, 229, 0.5);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
+}
+
+.test-btn:disabled {
+    background: var(--secondary);
+    cursor: not-allowed;
+    transform: none;
+}
+
+.test-result {
+    padding: 15px;
+    background: #1a243a;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-family: 'Fira Code', monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.test-result.success {
+    border-left: 4px solid var(--success);
+}
+
+.test-result.error {
+    border-left: 4px solid var(--danger);
+}
+
+.test-result .result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.test-result .result-title {
+    font-weight: 600;
+    color: var(--primary-light);
+}
+
+.test-result .copy-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--light);
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.test-result .copy-btn:hover {
+    background: var(--primary);
+}
+
+.test-result pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* Loading spinner */
+.loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: var(--primary-light);
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
 
 /* Dashboard Cards */
@@ -633,6 +765,15 @@ p {
         width: 100%;
         justify-content: center;
     }
+    
+    .input-group {
+        flex-direction: column;
+    }
+    
+    .test-btn {
+        width: 100%;
+        justify-content: center;
+    }
 }
 
 /* Animation for section loading */
@@ -678,61 +819,4 @@ ul {
 li {
     margin-bottom: 8px;
     line-height: 1.6;
-}
-
-/* Loading spinner */
-.spinner {
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    border: 3px solid rgba(255,255,255,.3);
-    border-radius: 50%;
-    border-top-color: #fff;
-    animation: spin 1s ease-in-out infinite;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-/* Light mode */
-body.light-mode {
-    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
-    color: #1e293b;
-}
-
-body.light-mode .header {
-    background: rgba(241, 245, 249, 0.95);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-body.light-mode .sidebar {
-    background: rgba(241, 245, 249, 0.95);
-    border-right: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-body.light-mode .section {
-    background: rgba(241, 245, 249, 0.7);
-    border: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-body.light-mode .endpoint {
-    background: rgba(226, 232, 240, 0.7);
-}
-
-body.light-mode .response {
-    background: #e2e8f0;
-    color: #1e293b;
-    border: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-body.light-mode .stat-card {
-    background: linear-gradient(135deg, rgba(241, 245, 249, 0.7) 0%, rgba(226, 232, 240, 0.7) 100%);
-    border: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-body.light-mode .code-block {
-    background: #e2e8f0;
-    color: #1e293b;
-    border: 1px solid rgba(0, 0, 0, 0.05);
 }
