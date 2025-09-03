@@ -753,3 +753,46 @@ li {
     margin-bottom: 8px;
     line-height: 1.6;
 }
+
+/* Search Bar Styles */
+.custom-topbar {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: rgba(30, 41, 59, 0.7);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#custom-search-input {
+    width: 100%;
+    padding: 12px 20px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--light);
+    font-size: 1rem;
+    font-family: 'Poppins', sans-serif;
+}
+
+#custom-search-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+#custom-search-input::placeholder {
+    color: var(--secondary);
+}
+
+/* Responsive design untuk search bar */
+@media (max-width: 768px) {
+    .custom-topbar {
+        margin: 10px 0;
+        padding: 10px;
+    }
+    
+    #custom-search-input {
+        padding: 10px 15px;
+        font-size: 0.9rem;
+    }
+}
