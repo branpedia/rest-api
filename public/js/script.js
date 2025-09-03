@@ -71,66 +71,53 @@ document.querySelectorAll('.copy-btn').forEach(button => {
 });
 
 // Copy result functionality
-function setupCopyResultButtons() {
-    document.querySelectorAll('.copy-result-btn').forEach(button => {
-        // Hapus event listener lama jika ada
-        button.replaceWith(button.cloneNode(true));
-    });
-
-    document.querySelectorAll('.copy-result-btn').forEach(button => {
-        button.addEventListener('click', function() {
-            const responseElement = this.closest('.response');
-            const preElement = responseElement.querySelector('pre');
-            const jsonContent = preElement.textContent;
-            
-            navigator.clipboard.writeText(jsonContent).then(() => {
-                const originalText = this.innerHTML;
-                this.innerHTML = '<i class="fas fa-check"></i> Copied!';
-                setTimeout(() => {
-                    this.innerHTML = '<i class="fas fa-copy"></i> Copy Result';
-                }, 2000);
-            });
+document.querySelectorAll('.copy-result-btn').forEach(button => {
+    button.addEventListener('click', function() {
+        const responseContent = this.closest('.response').textContent.trim();
+        // Remove the "Response" text and button text
+        const jsonContent = responseContent.replace('Response', '').replace('Copy Result', '').trim();
+        
+        navigator.clipboard.writeText(jsonContent).then(() => {
+            const originalText = this.innerHTML;
+            this.innerHTML = '<i class="fas fa-check"></i> Copied!';
+            setTimeout(() => {
+                this.innerHTML = originalText;
+            }, 2000);
         });
     });
-}
+});
 
 // Fungsi untuk test endpoint
-function testEndpoint(inputId, endpoint) {
+window.testEndpoint = function(inputId, resultId, endpoint = '/api/mediafire') {
     const urlInput = document.getElementById(inputId);
+    const resultDiv = document.getElementById(resultId);
     const testBtn = urlInput.nextElementSibling;
-    const endpointElement = testBtn.closest('.endpoint');
-    const responseElement = endpointElement.querySelector('.response');
     
     const url = urlInput.value.trim();
     
     // Validasi input
     if (!url) {
-        alert('URL tidak boleh kosong!');
+        showError(resultDiv, 'URL tidak boleh kosong!');
         return;
     }
     
     if (endpoint === '/api/mediafire' && !url.includes('mediafire.com')) {
-        alert('URL harus berasal dari MediaFire!');
+        showError(resultDiv, 'URL harus berasal dari MediaFire!');
         return;
     }
     
-    // Tampilkan loading pada tombol
+    // Tampilkan loading
     const originalText = testBtn.innerHTML;
-    testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+    testBtn.innerHTML = '<span class="loading-spinner"></span> Loading...';
     testBtn.disabled = true;
     
-    // Tampilkan loading pada response
-    const originalResponse = responseElement.innerHTML;
-    responseElement.innerHTML = `
-        <div class="response-header">
-            <span class="response-title">Response</span>
-            <button class="copy-result-btn" disabled><i class="fas fa-spinner fa-spin"></i> Loading</button>
-        </div>
+    resultDiv.innerHTML = `
         <div style="text-align: center; padding: 20px;">
             <span class="loading-spinner"></span>
             <p>Memproses request...</p>
         </div>
     `;
+    resultDiv.className = 'test-result';
     
     // Build API URL
     let apiUrl = `${window.location.origin}${endpoint}`;
@@ -151,36 +138,66 @@ function testEndpoint(inputId, endpoint) {
             testBtn.innerHTML = originalText;
             testBtn.disabled = false;
             
-            // Format JSON dengan indentasi
-            const formattedData = JSON.stringify(data, null, 2);
-            
-            // Update response dengan hasil real
-            responseElement.innerHTML = `
-                <极市 class="response-header">
-                    <span class="response-title">Response</span>
-                    <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
-                </div>
-                <pre>${formattedData}</pre>
-            `;
-            
-            // Setup ulang tombol copy
-            setupCopyResultButtons();
-            
+            // Tampilkan hasil
+            if (data.success) {
+                showSuccess(resultDiv, data);
+            } else {
+                showError(resultDiv, data.error, data.tips);
+            }
         })
         .catch(error => {
             // Kembalikan tampilan tombol
             testBtn.innerHTML = originalText;
             testBtn.disabled = false;
-            
-            // Kembalikan response contoh
-            responseElement.innerHTML = originalResponse;
-            
-            // Setup ulang tombol copy
-            setupCopyResultButtons();
-            
-            alert('Error: ' + error.message);
+            showError(resultDiv, 'Error: ' + error.message);
         });
+};
+
+// Fungsi untuk menampilkan hasil sukses
+function showSuccess(resultDiv, data) {
+    const formattedData = JSON.stringify(data, null, 2);
+    
+    resultDiv.innerHTML = `
+        <div class="result-header">
+            <span class="result-title">✅ Success</span>
+            <button class="copy-btn" onclick="copyToClipboard('${data.data.downloadUrl}')">
+                <i class="fas fa-copy"></i> Copy URL
+            </button>
+        </div>
+        <pre>${formattedData}</pre>
+        ${data.data.downloadUrl ? `
+        <div style="margin-top: 10px;">
+            <a href="${data.data.downloadUrl}" target="_blank" style="color: var(--primary-light); word-break: break-all;">
+                <i class="fas fa-download"></i> Download File
+            </a>
+        </div>
+        ` : ''}
+    `;
+    resultDiv.className = 'test-result success';
 }
+
+// Fungsi untuk menampilkan error
+function showError(resultDiv, error, tips = '') {
+    resultDiv.innerHTML = `
+        <div class="result-header">
+            <span class="result-title">❌ Error</span>
+        </div>
+        <div style="color: var(--danger);">
+            <p>${error}</p>
+            ${tips ? `<p><strong>Tips:</strong> ${tips}</p>` : ''}
+        </div>
+    `;
+    resultDiv.className = 'test-result error';
+}
+
+// Fungsi untuk copy ke clipboard
+window.copyToClipboard = function(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        alert('Berhasil disalin ke clipboard!');
+    }).catch(err => {
+        alert('Gagal menyalin: ' + err);
+    });
+};
 
 // Mobile menu toggle
 document.querySelector('.menu-toggle').addEventListener('click', function() {
@@ -192,7 +209,7 @@ const themeToggle = document.getElementById('themeToggle');
 themeToggle.addEventListener('click', function() {
     document.body.classList.toggle('light-mode');
     if (document.body.classList.contains('light-mode')) {
-        themeToggle.innerHTML = '<i class="fas fa-s极市n"></i>';
+        themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
         document.body.style.background = 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)';
         document.body.style.color = '#1e293b';
     } else {
@@ -211,7 +228,7 @@ const observerOptions = {
     rootMargin: '0px 0px -50px 0px'
 };
 
-const observer = new IntersectionObserver((entries极市) => {
+const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
             entry.target.style.animation = 'fadeInUp 0.6s ease forwards';
@@ -233,9 +250,4 @@ document.addEventListener('click', function(e) {
         document.querySelector('.sidebar').classList.contains('active')) {
         document.querySelector('.sidebar').classList.remove('active');
     }
-});
-
-// Inisialisasi saat halaman dimuat
-document.addEventListener('DOMContentLoaded', function() {
-    setupCopyResultButtons();
 });
