@@ -83,7 +83,7 @@ function setupCopyResultButtons() {
             const preElement = responseElement.querySelector('pre');
             const jsonContent = preElement.textContent;
             
-            navigator.clipboard.writeText(jsonContent).then(() => {
+            navigator.clipboard.write极市Text(jsonContent).then(() => {
                 const originalText = this.innerHTML;
                 this.innerHTML = '<i class="fas fa-check"></i> Copied!';
                 setTimeout(() => {
@@ -156,7 +156,7 @@ function testEndpoint(inputId, endpoint) {
             
             // Update response dengan hasil real
             responseElement.innerHTML = `
-                <极市 class="response-header">
+                <div class="response-header">
                     <span class="response-title">Response</span>
                     <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                 </div>
@@ -182,6 +182,46 @@ function testEndpoint(inputId, endpoint) {
         });
 }
 
+// Fungsi untuk search endpoint
+function setupSearch() {
+    const searchInput = document.getElementById('custom-search-input');
+    
+    searchInput.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase().trim();
+        const sections = document.querySelectorAll('.section');
+        
+        sections.forEach(section => {
+            if (searchTerm === '') {
+                section.style.display = 'none';
+                if (section.id === 'home') {
+                    section.style.display = 'block';
+                }
+                return;
+            }
+            
+            const endpoints = section.querySelectorAll('.endpoint');
+            let hasMatch = false;
+            
+            endpoints.forEach(endpoint => {
+                const endpointText = endpoint.textContent.toLowerCase();
+                if (endpointText.includes(searchTerm)) {
+                    endpoint.style.display = 'block';
+                    hasMatch = true;
+                } else {
+                    endpoint.style.display = 'none';
+                }
+            });
+            
+            // Tampilkan section jika ada hasil pencarian
+            if (hasMatch) {
+                section.style.display = 'block';
+            } else {
+                section.style.display = 'none';
+            }
+        });
+    });
+}
+
 // Mobile menu toggle
 document.querySelector('.menu-toggle').addEventListener('click', function() {
     document.querySelector('.sidebar').classList.toggle('active');
@@ -192,7 +232,7 @@ const themeToggle = document.getElementById('themeToggle');
 themeToggle.addEventListener('click', function() {
     document.body.classList.toggle('light-mode');
     if (document.body.classList.contains('light-mode')) {
-        themeToggle.innerHTML = '<i class="fas fa-s极市n"></i>';
+        themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
         document.body.style.background = 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)';
         document.body.style.color = '#1e293b';
     } else {
@@ -211,7 +251,7 @@ const observerOptions = {
     rootMargin: '0px 0px -50px 0px'
 };
 
-const observer = new IntersectionObserver((entries极市) => {
+const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
             entry.target.style.animation = 'fadeInUp 0.6s ease forwards';
@@ -238,4 +278,5 @@ document.addEventListener('click', function(e) {
 // Inisialisasi saat halaman dimuat
 document.addEventListener('DOMContentLoaded', function() {
     setupCopyResultButtons();
+    setupSearch();
 });
