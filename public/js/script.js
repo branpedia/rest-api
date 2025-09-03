@@ -85,7 +85,7 @@ function setupCopyResultButtons() {
             
             navigator.clipboard.writeText(jsonContent).then(() => {
                 const originalText = this.innerHTML;
-                this.innerHTML = '<极市i class="fas fa-check"></i> Copied!';
+                this.innerHTML = '<i class="fas fa-check"></i> Copied!';
                 setTimeout(() => {
                     this.innerHTML = '<i class="fas fa-copy"></i> Copy Result';
                 }, 2000);
@@ -95,91 +95,26 @@ function setupCopyResultButtons() {
 }
 
 // Fungsi untuk test endpoint
-function testEndpoint(inputId, endpoint) {
-    const urlInput = document.getElementById(inputId);
-    const testBtn = urlInput.nextElementSibling;
-    const endpointElement = testBtn.closest('.endpoint');
-    const responseElement = endpointElement.querySelector('.response');
-    
-    const url = urlInput.value.trim();
-    
-    // Validasi input
-    if (!url) {
-        alert('URL tidak boleh kosong!');
-        return;
-    }
-    
-    if (endpoint === '/api/mediafire' && !url.includes('mediafire.com')) {
-        alert('URL harus berasal dari MediaFire!');
-        return;
-    }
-    
-    // Tampilkan loading pada tombol
-    const originalText = testBtn.innerHTML;
-    testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
-    testBtn.disabled = true;
-    
-    // Tampilkan loading pada response
-    const originalResponse = responseElement.innerHTML;
-    responseElement.innerHTML = `
-        <div class="response-header">
-            <span class="response-title">Response</span>
-            <button class="copy-result-btn" disabled><i class="fas fa-spinner fa-spin"></i> Loading</button>
-        </div>
-        <div style="text-align: center; padding: 20px;">
-            <span class="loading-spinner"></span>
-            <p>Memproses request...</p>
-        </div>
-    `;
-    
-    // Build API URL
-    let apiUrl = `${window.location.origin}${endpoint}`;
-    if (url) {
-        apiUrl += `?url=${encodeURIComponent(url)}`;
-    }
-    
-    // Panggil API
-    fetch(apiUrl)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            // Kembalikan tampilan tombol
-            testBtn.innerHTML = originalText;
-            testBtn.disabled = false;
-            
-            // Format JSON dengan indentasi
-            const formattedData = JSON.stringify(data, null, 2);
-            
-            // Update response dengan hasil real
-            responseElement.innerHTML = `
-                <div class="response-header">
-                    <span class="response-title">Response</span>
-                    <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
-                </div>
-                <pre>${formattedData}</pre>
-            `;
-            
-            // Setup ulang tombol copy
-            setupCopyResultButtons();
-            
-        })
-        .catch(error => {
-            // Kembalikan tampilan tombol
-            testBtn.innerHTML = originalText;
-            testBtn.disabled = false;
-            
-            // Kembalikan response contoh
-            responseElement.innerHTML = originalResponse;
-            
-            // Setup ulang tombol copy
-            setupCopyResultButtons();
-            
-            alert('Error: ' + error.message);
-        });
+function testEndpoint(endpoint, url) {
+    return new Promise((resolve, reject) => {
+        // Build API URL
+        let apiUrl = `${window.location.origin}${endpoint}?url=${encodeURIComponent(url)}`;
+        
+        // Panggil API
+        fetch(apiUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                resolve(data);
+            })
+            .catch(error => {
+                reject(error);
+            });
+    });
 }
 
 // Mobile menu toggle
@@ -235,7 +170,91 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// Inisialisasi saat halaman dimuat
+// Event listener untuk semua tombol Test Endpoint
 document.addEventListener('DOMContentLoaded', function() {
     setupCopyResultButtons();
+    
+    document.querySelectorAll('.try-btn').forEach(button => {
+        button.addEventListener('click', async function() {
+            const endpoint = this.getAttribute('data-endpoint');
+            const endpointElement = this.closest('.endpoint');
+            const responseElement = endpointElement.querySelector('.response');
+            const copyResultBtn = responseElement.querySelector('.copy-result-btn');
+            
+            // Buat modal untuk input URL
+            let defaultUrl = '';
+            if (endpoint === '/api/mediafire') {
+                defaultUrl = 'https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file';
+            } else if (endpoint === '/api/youtube') {
+                defaultUrl = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+            }
+            
+            const url = prompt('Masukkan URL yang ingin di-test:', defaultUrl);
+            
+            // Validasi input
+            if (!url) {
+                return;
+            }
+            
+            if (endpoint === '/api/mediafire' && !url.includes('mediafire.com')) {
+                alert('URL harus berasal dari MediaFire!');
+                return;
+            }
+            
+            // Tampilkan loading pada tombol
+            const originalText = this.innerHTML;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+            this.disabled = true;
+            
+            // Tampilkan loading pada response
+            const originalResponse = responseElement.innerHTML;
+            responseElement.innerHTML = `
+                <div class="response-header">
+                    <span class="response-title">Response</span>
+                    <button class="copy-result-btn" disabled><i class="fas fa-spinner fa-spin"></i> Loading</button>
+                </div>
+                <div style="text-align: center; padding: 20px;">
+                    <span class="loading-spinner"></span>
+                    <p>Memproses request...</p>
+                </div>
+            `;
+            
+            try {
+                // Panggil API
+                const data = await testEndpoint(endpoint, url);
+                
+                // Kembalikan tampilan tombol
+                this.innerHTML = originalText;
+                this.disabled = false;
+                
+                // Format JSON dengan indentasi
+                const formattedData = JSON.stringify(data, null, 2);
+                
+                // Update response dengan hasil real
+                responseElement.innerHTML = `
+                    <div class="response-header">
+                        <span class="response-title">Response</span>
+                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
+                    </div>
+                    <pre>${formattedData}</pre>
+                `;
+                
+                // Setup ulang tombol copy
+                setupCopyResultButtons();
+                
+            } catch (error) {
+                // Kembalikan tampilan tombol
+                this.innerHTML = originalText;
+                this.disabled = false;
+                
+                // Kembalikan response contoh
+                responseElement.innerHTML = originalResponse;
+                
+                // Setup ulang tombol copy
+                setupCopyResultButtons();
+                
+                alert('Error: ' + error.message);
+            }
+        });
+    });
 });
