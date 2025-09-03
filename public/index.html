@@ -89,7 +89,7 @@
                         <span class="response-title">Response</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-{
+<pre>{
   "success": true,
   "data": {
     "name": "Terakomari - MD.zip",
@@ -98,21 +98,9 @@
     "uploaded": "2024-02-22 07:29:23",
     "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
   }
-}
+}</pre>
                 </div>
-                
-                <!-- Form Input URL -->
-                <div class="test-form">
-                    <h4>Test Endpoint</h4>
-                    <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                    <div class="input-group">
-                        <input type="text" id="testUrlHome" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlHome', 'testResultHome')">
-                            <i class="fas fa-bolt"></i> Test
-                        </button>
-                    </div>
-                    <div id="testResultHome" class="test-result"></div>
-                </div>
+                <button class="try-btn" data-endpoint="/api/mediafire"><i class="fas fa-bolt"></i> Test Endpoint</button>
             </div>
         </div>
 
@@ -155,7 +143,7 @@
                         <span class="response-title">Response</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-{
+<pre>{
   "success": true,
   "data": {
     "name": "Terakomari - MD.zip",
@@ -164,21 +152,9 @@
     "uploaded": "2024-02-22 07:29:23",
     "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
   }
-}
+}</pre>
                 </div>
-                
-                <!-- Form Input URL -->
-                <div class="test-form">
-                    <h4>Test Endpoint</h4>
-                    <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                    <div class="input-group">
-                        <input type="text" id="testUrlDashboard" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlDashboard', 'testResultDashboard')">
-                            <i class="fas fa-bolt"></i> Test
-                        </button>
-                    </div>
-                    <div id="testResultDashboard" class="test-result"></div>
-                </div>
+                <button class="try-btn" data-endpoint="/api/mediafire"><i class="fas fa-bolt"></i> Test Endpoint</button>
             </div>
         </div>
 
@@ -223,7 +199,7 @@ curl -X 'GET' \
                         <span class="response-title">Response</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-{
+<pre>{
   "success": true,
   "data": {
     "name": "Terakomari - MD.zip",
@@ -232,8 +208,9 @@ curl -X 'GET' \
     "uploaded": "2024-02-22 07:29:23",
     "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
   }
-}
+}</pre>
                 </div>
+                <button class="try-btn" data-endpoint="/api/mediafire"><i class="fas fa-bolt"></i> Test Endpoint</button>
             </div>
             
             <h3>Error Handling</h3>
@@ -244,24 +221,11 @@ curl -X 'GET' \
                         <span class="response-title">Error Response</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-{
+<pre>{
   "success": false,
   "error": "Invalid MediaFire URL"
-}
+}</pre>
                 </div>
-            </div>
-            
-            <!-- Test Form untuk Dokumentasi -->
-            <div class="test-form">
-                <h3>Test API MediaFire</h3>
-                <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                <div class="input-group">
-                    <input type="text" id="testUrlDocs" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                    <button class="test-btn" onclick="testEndpoint('testUrlDocs', 'testResultDocs')">
-                        <i class="fas fa-bolt"></i> Test Endpoint
-                    </button>
-                </div>
-                <div id="testResultDocs" class="test-result"></div>
             </div>
         </div>
 
@@ -281,7 +245,7 @@ curl -X 'GET' \
                         <span class="response-title">Response</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-{
+<pre>{
   "success": true,
   "data": {
     "name": "Terakomari - MD.zip",
@@ -290,21 +254,9 @@ curl -X 'GET' \
     "uploaded": "2024-02-22 07:29:23",
     "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
   }
-}
+}</pre>
                 </div>
-                
-                <!-- Form Input URL -->
-                <div class="test-form">
-                    <h4>Test Endpoint</h4>
-                    <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                    <div class="input-group">
-                        <input type="text" id="testUrlMediafire" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlMediafire', 'testResultMediafire')">
-                            <i class="fas fa-bolt"></i> Test
-                        </button>
-                    </div>
-                    <div id="testResultMediafire" class="test-result"></div>
-                </div>
+                <button class="try-btn" data-endpoint="/api/mediafire"><i class="fas fa-bolt"></i> Test Endpoint</button>
             </div>
             
             <div class="endpoint">
@@ -318,7 +270,7 @@ curl -X 'GET' \
                         <span class="response-title">Response</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-{
+<pre>{
   "success": true,
   "data": {
     "title": "Contoh Video YouTube",
@@ -326,21 +278,9 @@ curl -X 'GET' \
     "thumbnail": "https://i.ytimg.com/vi/.../default.jpg",
     "downloadUrl": "https://api.branpedia.com/download/youtube/..."
   }
-}
+}</pre>
                 </div>
-                
-                <!-- Form Input URL untuk YouTube -->
-                <div class="test-form">
-                    <h4>Test Endpoint</h4>
-                    <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                    <div class="input-group">
-                        <input type="text" id="testUrlYoutube" placeholder="https://www.youtube.com/watch?v=abc123" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlYoutube', 'testResultYoutube', '/api/youtube')">
-                            <i class="fas fa-bolt"></i> Test
-                        </button>
-                    </div>
-                    <div id="testResultYoutube" class="test-result"></div>
-                </div>
+                <button class="try-btn" data-endpoint="/api/youtube"><i class="fas fa-bolt"></i> Test Endpoint</button>
             </div>
             
             <h3>AI Services</h3>
@@ -355,27 +295,15 @@ curl -X 'GET' \
                         <span class="response-title">Response</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-{
+<pre>{
   "success": true,
   "data": {
     "original": "base64_image",
     "anime": "base64_image"
   }
-}
+}</pre>
                 </div>
-                
-                <!-- Form untuk AI Service -->
-                <div class="test-form">
-                    <h4>Test Endpoint</h4>
-                    <div class="parameter__name">image_url (optional)</div>
-                    <div class="input-group">
-                        <input type="text" id="testUrlAnime" placeholder="https://example.com/image.jpg" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlAnime', 'testResultAnime', '/api/ai/toanime')">
-                            <i class="fas fa-bolt"></i> Test
-                        </button>
-                    </div>
-                    <div id="testResultAnime" class="test-result"></div>
-                </div>
+                <button class="try-btn" data-endpoint="/api/ai/toanime"><i class="fas fa-bolt"></i> Test Endpoint</button>
             </div>
         </div>
 
@@ -402,11 +330,11 @@ curl -X 'GET' \
                         <span class="response-title">Kontak Info</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Info</button>
                     </div>
-{
+<pre>{
   "email": "support@branpedia.com",
   "website": "https://branpedia.com",
   "documentation": "https://docs.branpedia.com"
-}
+}</pre>
                 </div>
             </div>
         </div>
