@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Branpedia REST API | Unlimited</title>
-    <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
@@ -89,7 +88,7 @@
                         <span class="response-title">Response</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-{
+                    <pre>{
   "success": true,
   "data": {
     "name": "Terakomari - MD.zip",
@@ -98,7 +97,7 @@
     "uploaded": "2024-02-22 07:29:23",
     "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
   }
-}
+}</pre>
                 </div>
                 
                 <!-- Form Input URL -->
@@ -155,7 +154,7 @@
                         <span class="response-title">Response</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-{
+                    <pre>{
   "success": true,
   "data": {
     "name": "Terakomari - MD.zip",
@@ -164,7 +163,7 @@
     "uploaded": "2024-02-22 07:29:23",
     "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
   }
-}
+}</pre>
                 </div>
                 
                 <!-- Form Input URL -->
@@ -210,9 +209,9 @@
             <h3>Contoh Penggunaan</h3>
             <p>Contoh penggunaan dengan curl:</p>
             <div class="code-block">
-curl -X 'GET' \
+                <pre>curl -X 'GET' \
   'https://your-vercel-app.vercel.app/api/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fvj3al1c98u2zdr6%2FTerakomari_-_MD.zip%2Ffile' \
-  -H 'accept: application/json'
+  -H 'accept: application/json'</pre>
             </div>
             
             <h3>Response</h3>
@@ -223,7 +222,7 @@ curl -X 'GET' \
                         <span class="response-title">Response</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-{
+                    <pre>{
   "success": true,
   "data": {
     "name": "Terakomari - MD.zip",
@@ -232,7 +231,7 @@ curl -X 'GET' \
     "uploaded": "2024-02-22 07:29:23",
     "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
   }
-}
+}</pre>
                 </div>
             </div>
             
@@ -244,10 +243,10 @@ curl -X 'GET' \
                         <span class="response-title">Error Response</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-{
+                    <pre>{
   "success": false,
   "error": "Invalid MediaFire URL"
-}
+}</pre>
                 </div>
             </div>
             
@@ -291,9 +290,9 @@ curl -X 'GET' \
             <h3>Contoh Penggunaan</h3>
             <p>Contoh penggunaan dengan curl:</p>
             <div class="code-block">
-curl -X 'GET' \
+                <pre>curl -X 'GET' \
   'https://your-vercel-app.vercel.app/api/instagram?url=https%3A%2F%2Fwww.instagram.com%2Fp%2FCs6Y8-0uL7h%2F' \
-  -H 'accept: application/json'
+  -H 'accept: application/json'</pre>
             </div>
             
             <h3>Response</h3>
@@ -304,7 +303,7 @@ curl -X 'GET' \
                         <span class="response-title">Response</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-{
+                    <pre>{
   "success": true,
   "data": {
     "type": "video",
@@ -314,7 +313,7 @@ curl -X 'GET' \
     "duration": "0:15",
     "size": "3.2MB"
   }
-}
+}</pre>
                 </div>
             </div>
             
@@ -326,10 +325,10 @@ curl -X 'GET' \
                         <span class="response-title">Error Response</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-{
+                    <pre>{
   "success": false,
   "error": "Invalid Instagram URL"
-}
+}</pre>
                 </div>
             </div>
             
@@ -352,7 +351,6 @@ curl -X 'GET' \
             <h2>API Endpoints <span id="api-counter" class="api-counter">Loading...</span></h2>
             
             <div id="api-list">
-                <!-- API akan dimuat secara dinamis di sini oleh api-loader.js -->
                 <div class="loading-state">
                     <i class="fas fa-spinner fa-spin"></i> Memuat daftar API...
                 </div>
@@ -382,17 +380,160 @@ curl -X 'GET' \
                         <span class="response-title">Kontak Info</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Info</button>
                     </div>
-{
+                    <pre>{
   "email": "support@branpedia.com",
   "website": "https://branpedia.com",
   "documentation": "https://docs.branpedia.com"
-}
+}</pre>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="js/script.js"></script>
-    <script src="js/api-loader.js"></script>
+    <script>
+        // Basic functionality for the website
+        document.addEventListener('DOMContentLoaded', function() {
+            // Menu toggle functionality
+            const menuToggle = document.querySelector('.menu-toggle');
+            const sidebar = document.querySelector('.sidebar');
+            
+            if (menuToggle && sidebar) {
+                menuToggle.addEventListener('click', function() {
+                    sidebar.classList.toggle('active');
+                });
+            }
+            
+            // Theme toggle functionality
+            const themeToggle = document.getElementById('themeToggle');
+            
+            if (themeToggle) {
+                themeToggle.addEventListener('click', function() {
+                    document.body.classList.toggle('dark-theme');
+                    const icon = themeToggle.querySelector('i');
+                    
+                    if (document.body.classList.contains('dark-theme')) {
+                        icon.classList.remove('fa-moon');
+                        icon.classList.add('fa-sun');
+                    } else {
+                        icon.classList.remove('fa-sun');
+                        icon.classList.add('fa-moon');
+                    }
+                });
+            }
+            
+            // Navigation functionality
+            const navLinks = document.querySelectorAll('.sidebar-menu a');
+            
+            navLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    
+                    const targetId = this.getAttribute('data-target');
+                    const targetSection = document.getElementById(targetId);
+                    
+                    if (targetSection) {
+                        // Hide all sections
+                        document.querySelectorAll('.section').forEach(section => {
+                            section.classList.remove('active');
+                        });
+                        
+                        // Show target section
+                        targetSection.classList.add('active');
+                        
+                        // Update active link
+                        navLinks.forEach(navLink => {
+                            navLink.classList.remove('active');
+                        });
+                        this.classList.add('active');
+                        
+                        // Close sidebar on mobile
+                        if (window.innerWidth < 768) {
+                            sidebar.classList.remove('active');
+                        }
+                    }
+                });
+            });
+            
+            // Copy button functionality
+            const copyButtons = document.querySelectorAll('.copy-btn');
+            
+            copyButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const endpoint = this.getAttribute('data-endpoint');
+                    const fullUrl = window.location.origin + endpoint;
+                    
+                    navigator.clipboard.writeText(fullUrl).then(() => {
+                        // Show toast notification
+                        const toast = document.createElement('div');
+                        toast.textContent = 'Endpoint copied to clipboard!';
+                        toast.style.position = 'fixed';
+                        toast.style.bottom = '20px';
+                        toast.style.right = '20px';
+                        toast.style.backgroundColor = '#4361ee';
+                        toast.style.color = 'white';
+                        toast.style.padding = '10px 15px';
+                        toast.style.borderRadius = '5px';
+                        toast.style.zIndex = '1000';
+                        document.body.appendChild(toast);
+                        
+                        setTimeout(() => {
+                            document.body.removeChild(toast);
+                        }, 2000);
+                    });
+                });
+            });
+        });
+        
+        // Function to test endpoints
+        function testEndpoint(inputId, resultId, endpoint = '/api/mediafire') {
+            const urlInput = document.getElementById(inputId);
+            const resultDiv = document.getElementById(resultId);
+            
+            if (!urlInput.value) {
+                resultDiv.innerHTML = '<div class="error-message">Please enter a URL</div>';
+                resultDiv.className = 'test-result error';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing endpoint...';
+            resultDiv.className = 'test-result';
+            
+            // Simulate API call (replace with actual API call)
+            setTimeout(() => {
+                const randomSuccess = Math.random() > 0.3;
+                
+                if (randomSuccess) {
+                    resultDiv.innerHTML = `
+                        <div class="result-header">
+                            <span class="result-title">Success</span>
+                            <span class="status success"><i class="fas fa-check-circle"></i> 200 OK</span>
+                        </div>
+                        <pre>{
+  "success": true,
+  "data": {
+    "name": "Test File",
+    "size": "5.2MB",
+    "extension": "zip",
+    "uploaded": "2024-02-22 07:29:23",
+    "downloadUrl": "https://download.example.com/file.zip"
+  }
+}</pre>
+                        <a href="#" class="download-link">https://download.example.com/file.zip</a>
+                    `;
+                    resultDiv.className = 'test-result success';
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="result-header">
+                            <span class="result-title">Error</span>
+                            <span class="status error"><i class="fas fa-exclamation-circle"></i> 400 Bad Request</span>
+                        </div>
+                        <div class="error-message">Invalid URL provided</div>
+                        <div class="error-tips">Make sure the URL is valid and points to a MediaFire file</div>
+                    `;
+                    resultDiv.className = 'test-result error';
+                }
+            }, 1500);
+        }
+    </script>
 </body>
 </html>
