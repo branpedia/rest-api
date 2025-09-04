@@ -184,52 +184,45 @@
 
         <!-- Documentation Section -->
         <div id="docs" class="section">
-            <h2>Dokumentasi API</h2>
+            <h2>Dokumentasi API MediaFire Downloader</h2>
             
-            <div class="docs-tabs">
-                <button class="docs-tab active" data-tab="mediafire">MediaFire Downloader</button>
-                <button class="docs-tab" data-tab="instagram">Instagram Downloader</button>
+            <h3>Pengenalan</h3>
+            <p>API MediaFire Downloader memungkinkan Anda untuk mengekstrak link download langsung dari MediaFire. API ini berguna untuk mengintegrasikan fungsi download MediaFire ke dalam aplikasi Anda.</p>
+            
+            <h3>Authentication</h3>
+            <p>Untuk saat ini, API ini tidak memerlukan authentication. Namun, untuk penggunaan komersial atau volume tinggi, API key mungkin diperlukan di masa depan.</p>
+            
+            <h3>Endpoint</h3>
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="endpoint-method">GET</span>
+                    <span class="endpoint-url">/api/mediafire?url={mediafire_url}</span>
+                    <button class="copy-btn" data-endpoint="/api/mediafire?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
+                </div>
             </div>
             
-            <!-- MediaFire Documentation -->
-            <div id="docs-mediafire" class="docs-content active">
-                <h3>Pengenalan</h3>
-                <p>API MediaFire Downloader memungkinkan Anda untuk mengekstrak link download langsung dari MediaFire. API ini berguna untuk mengintegrasikan fungsi download MediaFire ke dalam aplikasi Anda.</p>
-                
-                <h3>Authentication</h3>
-                <p>Untuk saat ini, API ini tidak memerlukan authentication. Namun, untuk penggunaan komersial atau volume tinggi, API key mungkin diperlukan di masa depan.</p>
-                
-                <h3>Endpoint</h3>
-                <div class="endpoint">
-                    <div class="endpoint-header">
-                        <span class="endpoint-method">GET</span>
-                        <span class="endpoint-url">/api/mediafire?url={mediafire_url}</span>
-                        <button class="copy-btn" data-endpoint="/api/mediafire?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
-                    </div>
-                </div>
-                
-                <h3>Parameter</h3>
-                <p>Parameter yang diperlukan:</p>
-                <ul>
-                    <li><strong>url</strong> (string) - URL MediaFire yang ingin diambil informasi downloadnya</li>
-                </ul>
-                
-                <h3>Contoh Penggunaan</h3>
-                <p>Contoh penggunaan dengan curl:</p>
-                <div class="code-block">
+            <h3>Parameter</h3>
+            <p>Parameter yang diperlukan:</p>
+            <ul>
+                <li><strong>url</strong> (string) - URL MediaFire yang ingin diambil informasi downloadnya</li>
+            </ul>
+            
+            <h3>Contoh Penggunaan</h3>
+            <p>Contoh penggunaan dengan curl:</p>
+            <div class="code-block">
 curl -X 'GET' \
   'https://your-vercel-app.vercel.app/api/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fvj3al1c98u2zdr6%2FTerakomari_-_MD.zip%2Ffile' \
   -H 'accept: application/json'
-                </div>
-                
-                <h3>Response</h3>
-                <p>Response JSON akan berisi:</p>
-                <div class="endpoint">
-                    <div class="response">
-                        <div class="response-header">
-                            <span class="response-title">Response</span>
-                            <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
-                        </div>
+            </div>
+            
+            <h3>Response</h3>
+            <p>Response JSON akan berisi:</p>
+            <div class="endpoint">
+                <div class="response">
+                    <div class="response-header">
+                        <span class="response-title">Response</span>
+                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
+                    </div>
 {
   "success": true,
   "data": {
@@ -240,126 +233,35 @@ curl -X 'GET' \
     "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
   }
 }
-                    </div>
                 </div>
-                
-                <h3>Error Handling</h3>
-                <p>Jika terjadi error, response akan mengembalikan success false dan pesan error:</p>
-                <div class="endpoint">
-                    <div class="response">
-                        <div class="response-header">
-                            <span class="response-title">Error Response</span>
-                            <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
-                        </div>
+            </div>
+            
+            <h3>Error Handling</h3>
+            <p>Jika terjadi error, response akan mengembalikan success false dan pesan error:</p>
+            <div class="endpoint">
+                <div class="response">
+                    <div class="response-header">
+                        <span class="response-title">Error Response</span>
+                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
+                    </div>
 {
   "success": false,
   "error": "Invalid MediaFire URL"
 }
-                    </div>
-                </div>
-                
-                <!-- Test Form untuk Dokumentasi MediaFire -->
-                <div class="test-form">
-                    <h3>Test API MediaFire</h3>
-                    <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                    <div class="input-group">
-                        <input type="text" id="testUrlDocs" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlDocs', 'testResultDocs')">
-                            <i class="fas fa-bolt"></i> Test Endpoint
-                        </button>
-                    </div>
-                    <div id="testResultDocs" class="test-result"></div>
                 </div>
             </div>
             
-            <!-- Instagram Documentation -->
-            <div id="docs-instagram" class="docs-content">
-                <h3>Pengenalan</h3>
-                <p>API Instagram Downloader memungkinkan Anda untuk mengekstrak media (foto dan video) dari postingan Instagram. API ini berguna untuk mengunduh konten Instagram tanpa watermark.</p>
-                
-                <h3>Authentication</h3>
-                <p>Untuk saat ini, API ini tidak memerlukan authentication. Namun, untuk penggunaan komersial atau volume tinggi, API key mungkin diperlukan di masa depan.</p>
-                
-                <h3>Endpoint</h3>
-                <div class="endpoint">
-                    <div class="endpoint-header">
-                        <span class="endpoint-method">GET</span>
-                        <span class="endpoint-url">/api/instagram?url={instagram_url}</span>
-                        <button class="copy-btn" data-endpoint="/api/instagram?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
-                    </div>
+            <!-- Test Form untuk Dokumentasi -->
+            <div class="test-form">
+                <h3>Test API MediaFire</h3>
+                <div class="parameter__name required">url<span>&nbsp;*</span></div>
+                <div class="input-group">
+                    <input type="text" id="testUrlDocs" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
+                    <button class="test-btn" onclick="testEndpoint('testUrlDocs', 'testResultDocs')">
+                        <i class="fas fa-bolt"></i> Test Endpoint
+                    </button>
                 </div>
-                
-                <h3>Parameter</h3>
-                <p>Parameter yang diperlukan:</p>
-                <ul>
-                    <li><strong>url</strong> (string) - URL postingan Instagram yang ingin diunduh</li>
-                </ul>
-                
-                <h3>Contoh Penggunaan</h3>
-                <p>Contoh penggunaan dengan curl:</p>
-                <div class="code-block">
-curl -X 'GET' \
-  'https://your-vercel-app.vercel.app/api/instagram?url=https%3A%2F%2Fwww.instagram.com%2Fp%2FC3FhCj2uV5P%2F' \
-  -H 'accept: application/json'
-                </div>
-                
-                <h3>Response</h3>
-                <p>Response JSON akan berisi:</p>
-                <div class="endpoint">
-                    <div class="response">
-                        <div class="response-header">
-                            <span class="response-title">Response</span>
-                            <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
-                        </div>
-{
-  "success": true,
-  "data": {
-    "author": {
-      "name": "Nama Pengguna",
-      "username": "username"
-    },
-    "media": [
-      {
-        "type": "image",
-        "url": "https://instagram.fcgk18-2.fna.fbcdn.net/..."
-      },
-      {
-        "type": "video",
-        "url": "https://instagram.fcgk18-2.fna.fbcdn.net/..."
-      }
-    ]
-  }
-}
-                    </div>
-                </div>
-                
-                <h3>Error Handling</h3>
-                <p>Jika terjadi error, response akan mengembalikan success false dan pesan error:</p>
-                <div class="endpoint">
-                    <div class="response">
-                        <div class="response-header">
-                            <span class="response-title">Error Response</span>
-                            <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
-                        </div>
-{
-  "success": false,
-  "error": "Invalid Instagram URL"
-}
-                    </div>
-                </div>
-                
-                <!-- Test Form untuk Dokumentasi Instagram -->
-                <div class="test-form">
-                    <h3>Test API Instagram</h3>
-                    <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                    <div class="input-group">
-                        <input type="text" id="testUrlInstagramDocs" placeholder="https://www.instagram.com/p/C3FhCj2uV5P/" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlInstagramDocs', 'testResultInstagramDocs', '/api/instagram')">
-                            <i class="fas fa-bolt"></i> Test Endpoint
-                        </button>
-                    </div>
-                    <div id="testResultInstagramDocs" class="test-result"></div>
-                </div>
+                <div id="testResultDocs" class="test-result"></div>
             </div>
         </div>
 
@@ -441,52 +343,6 @@ curl -X 'GET' \
                 </div>
             </div>
             
-            <div class="endpoint">
-                <div class="endpoint-header">
-                    <span class="endpoint-method">GET</span>
-                    <span class="endpoint-url">/api/instagram?url={instagram_url}</span>
-                    <button class="copy-btn" data-endpoint="/api/instagram?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
-                </div>
-                <div class="response">
-                    <div class="response-header">
-                        <span class="response-title">Response</span>
-                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
-                    </div>
-{
-  "success": true,
-  "data": {
-    "author": {
-      "name": "Nama Pengguna",
-      "username": "username"
-    },
-    "media": [
-      {
-        "type": "image",
-        "url": "https://instagram.fcgk18-2.fna.fbcdn.net/..."
-      },
-      {
-        "type": "video",
-        "url": "https://instagram.fcgk18-2.fna.fbcdn.net/..."
-      }
-    ]
-  }
-}
-                </div>
-                
-                <!-- Form Input URL untuk Instagram -->
-                <div class="test-form">
-                    <h4>Test Endpoint</h4>
-                    <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                    <div class="input-group">
-                        <input type="text" id="testUrlInstagram" placeholder="https://www.instagram.com/p/C3FhCj2uV5P/" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlInstagram', 'testResultInstagram', '/api/instagram')">
-                            <i class="fas fa-bolt"></i> Test
-                        </button>
-                    </div>
-                    <div id="testResultInstagram" class="test-result"></div>
-                </div>
-            </div>
-            
             <h3>AI Services</h3>
             <div class="endpoint">
                 <div class="endpoint-header">
@@ -557,54 +413,5 @@ curl -X 'GET' \
     </div>
 
     <script src="js/script.js"></script>
-    <script>
-        // Fungsi untuk test endpoint API
-        async function testEndpoint(inputId, resultId, endpoint = '/api/mediafire') {
-            const urlInput = document.getElementById(inputId);
-            const resultDiv = document.getElementById(resultId);
-            
-            if (!urlInput.value.trim()) {
-                resultDiv.innerHTML = '<div class="error">URL tidak boleh kosong!</div>';
-                return;
-            }
-            
-            resultDiv.innerHTML = '<div class="loading">Menguji endpoint...</div>';
-            
-            try {
-                // Encode URL untuk parameter query
-                const encodedUrl = encodeURIComponent(urlInput.value.trim());
-                
-                // Panggil API endpoint
-                const response = await fetch(`${endpoint}?url=${encodedUrl}`);
-                const data = await response.json();
-                
-                // Tampilkan hasil
-                resultDiv.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
-            } catch (error) {
-                resultDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
-            }
-        }
-        
-        // Tab functionality untuk dokumentasi
-        document.addEventListener('DOMContentLoaded', function() {
-            const docsTabs = document.querySelectorAll('.docs-tab');
-            
-            docsTabs.forEach(tab => {
-                tab.addEventListener('click', function() {
-                    const tabName = this.getAttribute('data-tab');
-                    
-                    // Hapus kelas active dari semua tab dan konten
-                    document.querySelectorAll('.docs-tab').forEach(t => t.classList.remove('active'));
-                    document.querySelectorAll('.docs-content').forEach(c => c.classList.remove('active'));
-                    
-                    // Tambahkan kelas active ke tab yang diklik
-                    this.classList.add('active');
-                    
-                    // Tampilkan konten yang sesuai
-                    document.getElementById(`docs-${tabName}`).classList.add('active');
-                });
-            });
-        });
-    </script>
 </body>
 </html>
