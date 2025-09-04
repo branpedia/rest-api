@@ -32,11 +32,11 @@
         </div>
         <div class="sidebar-menu">
             <ul>
-                <li><a href="#" class="active" data-target="home"><i class="fas fa-home"></i> <span class="menu-text">Home</span></a></li>
-                <li><a href="#" data-target="dashboard"><i class="fas fa-chart-bar"></i> <span class="menu-text">Dashboard</span></a></li>
-                <li><a href="#" data-target="docs"><i class="fas fa-book"></i> <span class="menu-text">Dokumentasi</span></a></li>
-                <li><a href="#" data-target="api"><i class="fas fa-code"></i> <span class="menu-text">API Endpoints</span></a></li>
-                <li><a href="#" data-target="about"><i class="fas fa-info-circle"></i> <span class="menu-text">Tentang</span></a></li>
+                <li><a href="#home" class="active"><i class="fas fa-home"></i> <span class="menu-text">Home</span></a></li>
+                <li><a href="#dashboard"><i class="fas fa-chart-bar"></i> <span class="menu-text">Dashboard</span></a></li>
+                <li><a href="#docs"><i class="fas fa-book"></i> <span class="menu-text">Dokumentasi</span></a></li>
+                <li><a href="#api"><i class="fas fa-code"></i> <span class="menu-text">API Endpoints</span></a></li>
+                <li><a href="#about"><i class="fas fa-info-circle"></i> <span class="menu-text">Tentang</span></a></li>
             </ul>
         </div>
     </div>
@@ -48,8 +48,8 @@
                 <h1>Branpedia REST API</h1>
                 <p>Kumpulan API gratis untuk pengembang. Akses berbagai layanan dengan mudah melalui endpoint API kami tanpa batas.</p>
                 <div class="hero-buttons">
-                    <a href="#" class="btn btn-primary" data-target="docs"><i class="fas fa-book"></i> Lihat Dokumentasi</a>
-                    <a href="#" class="btn btn-outline" data-target="api"><i class="fas fa-code"></i> Explor API</a>
+                    <a href="#docs" class="btn btn-primary"><i class="fas fa-book"></i> Lihat Dokumentasi</a>
+                    <a href="#api" class="btn btn-outline"><i class="fas fa-code"></i> Explor API</a>
                 </div>
             </div>
             
@@ -81,8 +81,8 @@
             <div class="endpoint">
                 <div class="endpoint-header">
                     <span class="endpoint-method">GET</span>
-                    <span class="endpoint-url">/api/mediafire?url=https://www.mediafire.com/...</span>
-                    <button class="copy-btn" data-endpoint="/api/mediafire?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
+                    <span class="endpoint-url">/api/instagram?url=https://www.instagram.com/p/Cxample...</span>
+                    <button class="copy-btn" data-endpoint="/api/instagram?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
                 </div>
                 <div class="response">
                     <div class="response-header">
@@ -92,22 +92,22 @@
 {
   "success": true,
   "data": {
-    "name": "Terakomari - MD.zip",
-    "size": "6.78MB",
-    "extension": "zip",
-    "uploaded": "2024-02-22 07:29:23",
-    "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
+    "type": "video",
+    "title": "Contoh Video Instagram",
+    "duration": "0:23",
+    "thumbnail": "https://scontent.cdninstagram.com/v/...",
+    "downloadUrl": "https://api.branpedia.com/download/instagram/..."
   }
 }
                 </div>
                 
                 <!-- Form Input URL -->
                 <div class="test-form">
-                    <h4>Test Endpoint</h4>
+                    <h4>Test Endpoint Instagram</h4>
                     <div class="parameter__name required">url<span>&nbsp;*</span></div>
                     <div class="input-group">
-                        <input type="text" id="testUrlHome" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlHome', 'testResultHome')">
+                        <input type="text" id="testUrlHome" placeholder="https://www.instagram.com/p/Cxample..." class="url-input">
+                        <button class="test-btn" onclick="testEndpoint('testUrlHome', 'testResultHome', '/api/instagram')">
                             <i class="fas fa-bolt"></i> Test
                         </button>
                     </div>
@@ -147,8 +147,8 @@
             <div class="endpoint">
                 <div class="endpoint-header">
                     <span class="endpoint-method">GET</span>
-                    <span class="endpoint-url">/api/mediafire?url=</span>
-                    <button class="copy-btn" data-endpoint="/api/mediafire?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
+                    <span class="endpoint-url">/api/instagram?url=</span>
+                    <button class="copy-btn" data-endpoint="/api/instagram?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
                 </div>
                 <div class="response">
                     <div class="response-header">
@@ -158,22 +158,22 @@
 {
   "success": true,
   "data": {
-    "name": "Terakomari - MD.zip",
-    "size": "6.78MB",
-    "extension": "zip",
-    "uploaded": "2024-02-22 07:29:23",
-    "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
+    "type": "video",
+    "title": "Contoh Video Instagram",
+    "duration": "0:23",
+    "thumbnail": "https://scontent.cdninstagram.com/v/...",
+    "downloadUrl": "https://api.branpedia.com/download/instagram/..."
   }
 }
                 </div>
                 
                 <!-- Form Input URL -->
                 <div class="test-form">
-                    <h4>Test Endpoint</h4>
+                    <h4>Test Endpoint Instagram</h4>
                     <div class="parameter__name required">url<span>&nbsp;*</span></div>
                     <div class="input-group">
-                        <input type="text" id="testUrlDashboard" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlDashboard', 'testResultDashboard')">
+                        <input type="text" id="testUrlDashboard" placeholder="https://www.instagram.com/p/Cxample..." class="url-input">
+                        <button class="test-btn" onclick="testEndpoint('testUrlDashboard', 'testResultDashboard', '/api/instagram')">
                             <i class="fas fa-bolt"></i> Test
                         </button>
                     </div>
@@ -184,10 +184,10 @@
 
         <!-- Documentation Section -->
         <div id="docs" class="section">
-            <h2>Dokumentasi API MediaFire Downloader</h2>
+            <h2>Dokumentasi API Instagram Downloader</h2>
             
             <h3>Pengenalan</h3>
-            <p>API MediaFire Downloader memungkinkan Anda untuk mengekstrak link download langsung dari MediaFire. API ini berguna untuk mengintegrasikan fungsi download MediaFire ke dalam aplikasi Anda.</p>
+            <p>API Instagram Downloader memungkinkan Anda untuk mengekstrak dan mendownload konten dari Instagram seperti foto, video, reel, dan IGTV. API ini berguna untuk mengintegrasikan fungsi download Instagram ke dalam aplikasi Anda.</p>
             
             <h3>Authentication</h3>
             <p>Untuk saat ini, API ini tidak memerlukan authentication. Namun, untuk penggunaan komersial atau volume tinggi, API key mungkin diperlukan di masa depan.</p>
@@ -196,22 +196,31 @@
             <div class="endpoint">
                 <div class="endpoint-header">
                     <span class="endpoint-method">GET</span>
-                    <span class="endpoint-url">/api/mediafire?url={mediafire_url}</span>
-                    <button class="copy-btn" data-endpoint="/api/mediafire?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
+                    <span class="endpoint-url">/api/instagram?url={instagram_url}</span>
+                    <button class="copy-btn" data-endpoint="/api/instagram?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
                 </div>
             </div>
             
             <h3>Parameter</h3>
             <p>Parameter yang diperlukan:</p>
             <ul>
-                <li><strong>url</strong> (string) - URL MediaFire yang ingin diambil informasi downloadnya</li>
+                <li><strong>url</strong> (string) - URL Instagram yang ingin diambil informasi downloadnya</li>
+            </ul>
+            
+            <h3>Jenis Konten yang Didukung</h3>
+            <ul>
+                <li>Postingan foto (single dan multiple)</li>
+                <li>Postingan video</li>
+                <li>Instagram Reels</li>
+                <li>IGTV videos</li>
+                <li>Stories (jika publik)</li>
             </ul>
             
             <h3>Contoh Penggunaan</h3>
             <p>Contoh penggunaan dengan curl:</p>
             <div class="code-block">
 curl -X 'GET' \
-  'https://your-vercel-app.vercel.app/api/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fvj3al1c98u2zdr6%2FTerakomari_-_MD.zip%2Ffile' \
+  'https://api.branpedia.com/api/instagram?url=https%3A%2F%2Fwww.instagram.com%2Fp%2FCxample' \
   -H 'accept: application/json'
             </div>
             
@@ -226,11 +235,11 @@ curl -X 'GET' \
 {
   "success": true,
   "data": {
-    "name": "Terakomari - MD.zip",
-    "size": "6.78MB",
-    "extension": "zip",
-    "uploaded": "2024-02-22 07:29:23",
-    "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
+    "type": "video",
+    "title": "Contoh Video Instagram",
+    "duration": "0:23",
+    "thumbnail": "https://scontent.cdninstagram.com/v/...",
+    "downloadUrl": "https://api.branpedia.com/download/instagram/..."
   }
 }
                 </div>
@@ -246,18 +255,18 @@ curl -X 'GET' \
                     </div>
 {
   "success": false,
-  "error": "Invalid MediaFire URL"
+  "error": "Invalid Instagram URL or content not available"
 }
                 </div>
             </div>
             
             <!-- Test Form untuk Dokumentasi -->
             <div class="test-form">
-                <h3>Test API MediaFire</h3>
+                <h3>Test API Instagram</h3>
                 <div class="parameter__name required">url<span>&nbsp;*</span></div>
                 <div class="input-group">
-                    <input type="text" id="testUrlDocs" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                    <button class="test-btn" onclick="testEndpoint('testUrlDocs', 'testResultDocs')">
+                    <input type="text" id="testUrlDocs" placeholder="https://www.instagram.com/p/Cxample..." class="url-input">
+                    <button class="test-btn" onclick="testEndpoint('testUrlDocs', 'testResultDocs', '/api/instagram')">
                         <i class="fas fa-bolt"></i> Test Endpoint
                     </button>
                 </div>
@@ -273,8 +282,8 @@ curl -X 'GET' \
             <div class="endpoint">
                 <div class="endpoint-header">
                     <span class="endpoint-method">GET</span>
-                    <span class="endpoint-url">/api/mediafire?url={mediafire_url}</span>
-                    <button class="copy-btn" data-endpoint="/api/mediafire?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
+                    <span class="endpoint-url">/api/instagram?url={instagram_url}</span>
+                    <button class="copy-btn" data-endpoint="/api/instagram?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
                 </div>
                 <div class="response">
                     <div class="response-header">
@@ -284,26 +293,26 @@ curl -X 'GET' \
 {
   "success": true,
   "data": {
-    "name": "Terakomari - MD.zip",
-    "size": "6.78MB",
-    "extension": "zip",
-    "uploaded": "2024-02-22 07:29:23",
-    "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
+    "type": "video",
+    "title": "Contoh Video Instagram",
+    "duration": "0:23",
+    "thumbnail": "https://scontent.cdninstagram.com/v/...",
+    "downloadUrl": "https://api.branpedia.com/download/instagram/..."
   }
 }
                 </div>
                 
                 <!-- Form Input URL -->
                 <div class="test-form">
-                    <h4>Test Endpoint</h4>
+                    <h4>Test Endpoint Instagram</h4>
                     <div class="parameter__name required">url<span>&nbsp;*</span></div>
                     <div class="input-group">
-                        <input type="text" id="testUrlMediafire" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlMediafire', 'testResultMediafire')">
+                        <input type="text" id="testUrlInstagram" placeholder="https://www.instagram.com/p/Cxample..." class="url-input">
+                        <button class="test-btn" onclick="testEndpoint('testUrlInstagram', 'testResultInstagram', '/api/instagram')">
                             <i class="fas fa-bolt"></i> Test
                         </button>
                     </div>
-                    <div id="testResultMediafire" class="test-result"></div>
+                    <div id="testResultInstagram" class="test-result"></div>
                 </div>
             </div>
             
@@ -387,7 +396,7 @@ curl -X 'GET' \
             
             <h3>Fitur</h3>
             <ul>
-                <li>API Downloader (MediaFire, YouTube, Instagram, TikTok)</li>
+                <li>API Downloader (Instagram, MediaFire, YouTube, TikTok)</li>
                 <li>Layanan AI (Image to Anime, ChatGPT, dll)</li>
                 <li>Tools (URL Shortener, Image Processing, dll)</li>
                 <li>Tanpa batas penggunaan</li>
@@ -405,7 +414,8 @@ curl -X 'GET' \
 {
   "email": "support@branpedia.com",
   "website": "https://branpedia.com",
-  "documentation": "https://docs.branpedia.com"
+  "documentation": "https://docs.branpedia.com",
+  "instagram": "https://instagram.com/branpedia.api"
 }
                 </div>
             </div>
