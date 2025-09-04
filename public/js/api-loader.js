@@ -1,3 +1,4 @@
+// public/js/api-loader.js
 // Fungsi untuk memuat API secara dinamis
 async function loadAPIs() {
     const apiEndpointsSection = document.getElementById('api');
@@ -22,8 +23,8 @@ async function loadAPIs() {
         
         // Jika endpoint /api/list tidak tersedia, gunakan fallback
         if (!response.ok) {
-            console.warn('Endpoint /api/list tidak tersedia, menggunakan fallback detection');
-            showError(apiEndpointsSection, 'Endpoint /api/list tidak tersedia, menggunakan fallback detection');
+            console.warn('Endpoint /api/list tidak tersedia, status:', response.status);
+            showMessage(apiEndpointsSection, 'Endpoint /api/list tidak tersedia, menggunakan fallback detection', 'warning');
             await loadAPIsFallback();
             return;
         }
@@ -35,12 +36,12 @@ async function loadAPIs() {
             renderAPIs(result.data);
         } else {
             console.error('Gagal memuat daftar API:', result.error);
-            showError(apiEndpointsSection, 'Gagal memuat daftar API: ' + (result.error || 'Unknown error'));
+            showMessage(apiEndpointsSection, 'Gagal memuat daftar API: ' + (result.error || 'Unknown error'), 'error');
             await loadAPIsFallback();
         }
     } catch (error) {
         console.error('Error:', error);
-        showError(apiEndpointsSection, 'Error: ' + error.message);
+        showMessage(apiEndpointsSection, 'Error: ' + error.message, 'error');
         await loadAPIsFallback();
     }
 }
@@ -53,10 +54,10 @@ async function loadAPIsFallback() {
     if (!apiEndpointsSection) return;
     
     try {
-        console.log('Menggunakan fallback detection');
-        showError(apiEndpointsSection, 'Menggunakan fallback detection karena endpoint /api/list tidak tersedia');
+        console.log('Menggunakan fallback detection untuk Vercel');
+        showMessage(apiEndpointsSection, 'Menggunakan fallback detection', 'info');
         
-        // Daftar API default jika tidak bisa mendapatkan dari server
+        // Daftar API default untuk Vercel
         const defaultAPIs = [
             { name: 'mediafire', path: '/api/mediafire' },
             { name: 'youtube', path: '/api/youtube' },
@@ -64,26 +65,54 @@ async function loadAPIsFallback() {
             { name: 'tiktok', path: '/api/tiktok' }
         ];
         
-        // Beri delay kecil untuk simulasi loading
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Coba test endpoint mana yang benar-benar ada
+        const availableAPIs = [];
         
-        renderAPIs(defaultAPIs);
+        for (const api of defaultAPIs) {
+            try {
+                const response = await fetch(api.path, { method: 'HEAD' });
+                if (response.ok) {
+                    availableAPIs.push(api);
+                    console.log(`API ${api.name} tersedia`);
+                }
+            } catch (e) {
+                console.log(`API ${api.name} tidak tersedia`);
+            }
+        }
+        
+        // Beri delay kecil untuk UX
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        if (availableAPIs.length > 0) {
+            renderAPIs(availableAPIs);
+        } else {
+            // Jika tidak ada API yang merespon, tampilkan semua sebagai fallback
+            renderAPIs(defaultAPIs);
+        }
+        
     } catch (error) {
         console.error('Error dalam fallback detection:', error);
-        showError(apiEndpointsSection, 'Error dalam fallback detection: ' + error.message);
+        showMessage(apiEndpointsSection, 'Error dalam fallback detection: ' + error.message, 'error');
+        
+        // Fallback terakhir - tampilkan API default
+        const fallbackAPIs = [
+            { name: 'mediafire', path: '/api/mediafire' },
+            { name: 'youtube', path: '/api/youtube' }
+        ];
+        
+        renderAPIs(fallbackAPIs);
     }
 }
 
-// Fungsi untuk menampilkan error
-function showError(container, message) {
+// Fungsi untuk menampilkan pesan
+function showMessage(container, message, type = 'info') {
+    const icon = type === 'error' ? 'exclamation-triangle' : 
+                 type === 'warning' ? 'exclamation-circle' : 'info-circle';
+    
     container.innerHTML = `
-        <div class="error-state">
-            <i class="fas fa-exclamation-triangle"></i>
-            <h3>Gagal Memuat Daftar API</h3>
+        <div class="message-state ${type}">
+            <i class="fas fa-${icon}"></i>
             <p>${message}</p>
-            <button onclick="loadAPIs()" class="btn btn-outline">
-                <i class="fas fa-redo"></i> Coba Lagi
-            </button>
         </div>
     `;
 }
@@ -100,13 +129,12 @@ function renderAPIs(apiList) {
         apiCounter.textContent = `${apiList.length} Endpoints`;
     }
     
-    // Hapus konten lama (kecuali judul)
-    const oldContent = apiEndpointsSection.querySelectorAll('.endpoint, .loading-state, .error-state');
-    oldContent.forEach(element => element.remove());
+    // Hapus konten lama
+    apiEndpointsSection.querySelectorAll('.endpoint, .loading-state, .message-state').forEach(el => el.remove());
     
     // Jika tidak ada API
     if (apiList.length === 0) {
-        apiEndpointsSection.innerHTML = `
+        apiEndpointsSection.innerHTML += `
             <div class="empty-state">
                 <i class="fas fa-inbox"></i>
                 <h3>Tidak Ada API yang Tersedia</h3>
@@ -120,7 +148,7 @@ function renderAPIs(apiList) {
     const categories = {
         'Downloader': [],
         'AI Services': [],
-        'Other': []
+        'Tools': []
     };
     
     apiList.forEach(api => {
@@ -133,7 +161,7 @@ function renderAPIs(apiList) {
                   api.name.includes('chatgpt')) {
             categories['AI Services'].push(api);
         } else {
-            categories['Other'].push(api);
+            categories['Tools'].push(api);
         }
     });
     
@@ -156,16 +184,61 @@ function renderAPIs(apiList) {
 function createEndpointElement(api) {
     const endpointDiv = document.createElement('div');
     endpointDiv.className = 'endpoint';
+    endpointDiv.id = `endpoint-${api.name}`;
     
     // Dapatkan parameter default berdasarkan nama API
     let method = 'GET';
     let params = [];
+    let exampleResponse = {
+        success: true,
+        data: { message: `Response from ${api.name} API` }
+    };
     
-    if (api.name.includes('mediafire') || api.name.includes('youtube') || 
-        api.name.includes('instagram') || api.name.includes('tiktok')) {
+    if (api.name.includes('mediafire')) {
         params = [{ name: 'url', required: true }];
-    } else if (api.name.includes('toanime')) {
-        params = [{ name: 'image_url', required: false }];
+        exampleResponse = {
+            success: true,
+            data: {
+                name: "contoh-file.zip",
+                size: "5.2MB",
+                extension: "zip",
+                uploaded: "2023-10-05 10:30:45",
+                downloadUrl: "https://download.mediafire.com/contoh-file.zip"
+            }
+        };
+    } else if (api.name.includes('youtube')) {
+        params = [{ name: 'url', required: true }];
+        exampleResponse = {
+            success: true,
+            data: {
+                title: "Contoh Video YouTube",
+                duration: "10:30",
+                thumbnail: "https://i.ytimg.com/vi/abc123/default.jpg",
+                downloadUrl: "https://api.example.com/download/youtube/abc123"
+            }
+        };
+    } else if (api.name.includes('instagram') || api.name.includes('tiktok')) {
+        params = [{ name: 'url', required: true }];
+        exampleResponse = {
+            success: true,
+            data: {
+                type: "video",
+                caption: "Caption dari konten",
+                downloadUrl: `https://api.example.com/download/${api.name}/abc123`,
+                thumbnail: `https://api.example.com/thumbnail/${api.name}/abc123`,
+                duration: "0:15",
+                size: "3.2MB"
+            }
+        };
+    } else if (api.name.includes('ai') || api.name.includes('toanime')) {
+        params = [{ name: 'image', required: true }];
+        exampleResponse = {
+            success: true,
+            data: {
+                original: "base64_image_data",
+                result: "base64_image_data"
+            }
+        };
     }
     
     // Bangun URL dengan parameter
@@ -183,13 +256,17 @@ function createEndpointElement(api) {
     // Bangun form input berdasarkan parameter
     let formInputs = '';
     params.forEach(param => {
+        const placeholder = param.name === 'url' ? 'https://example.com' : 
+                           param.name === 'image' ? 'URL gambar atau base64' : 
+                           `Masukkan ${param.name}`;
+        
         formInputs += `
             <div class="parameter__name ${param.required ? 'required' : ''}">
                 ${param.name}${param.required ? '<span>&nbsp;*</span>' : ''}
             </div>
             <div class="input-group">
-                <input type="text" id="test${api.name}${param.name}" 
-                       placeholder="Masukkan ${param.name}" class="url-input">
+                <input type="text" id="test-${api.name}-${param.name}" 
+                       placeholder="${placeholder}" class="url-input">
             </div>
         `;
     });
@@ -207,12 +284,7 @@ function createEndpointElement(api) {
                 <span class="response-title">Response</span>
                 <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
             </div>
-{
-  "success": true,
-  "data": {
-    "message": "Response from ${api.name} API"
-  }
-}
+<pre>${JSON.stringify(exampleResponse, null, 2)}</pre>
         </div>
         <div class="test-form">
             <h4>Test Endpoint</h4>
@@ -222,24 +294,24 @@ function createEndpointElement(api) {
                     <i class="fas fa-bolt"></i> Test
                 </button>
             </div>
-            <div id="testResult${api.name}" class="test-result"></div>
+            <div id="testResult-${api.name}" class="test-result"></div>
         </div>
     `;
     
     return endpointDiv;
 }
 
-// Fungsi untuk test endpoint (diperbarui)
+// Fungsi untuk test endpoint
 window.testEndpoint = function(apiName, endpoint, params) {
-    const resultDiv = document.getElementById(`testResult${apiName}`);
-    const testBtn = document.querySelector(`#testResult${apiName}`).previousElementSibling.querySelector('.test-btn');
+    const resultDiv = document.getElementById(`testResult-${apiName}`);
+    const testBtn = document.querySelector(`#endpoint-${apiName} .test-btn`);
     
     // Bangun query parameters
     const queryParams = {};
     let hasError = false;
     
     params.forEach(param => {
-        const input = document.getElementById(`test${apiName}${param.name}`);
+        const input = document.getElementById(`test-${apiName}-${param.name}`);
         if (param.required && (!input || !input.value.trim())) {
             showTestError(resultDiv, `${param.name} tidak boleh kosong!`);
             hasError = true;
@@ -308,19 +380,18 @@ window.testEndpoint = function(apiName, endpoint, params) {
 // Fungsi untuk menampilkan hasil sukses
 function showTestSuccess(resultDiv, data) {
     const formattedData = JSON.stringify(data, null, 2);
-    const escapedData = formattedData.replace(/'/g, "\\'");
     
     resultDiv.innerHTML = `
         <div class="result-header">
             <span class="result-title">✅ Success</span>
-            <button class="copy-btn" onclick="copyToClipboard('${escapedData}')">
+            <button class="copy-btn" onclick="copyToClipboard(${JSON.stringify(formattedData)})">
                 <i class="fas fa-copy"></i> Copy Result
             </button>
         </div>
         <pre>${formattedData}</pre>
         ${data.data && data.data.downloadUrl ? `
         <div style="margin-top: 10px;">
-            <a href="${data.data.downloadUrl}" target="_blank" style="color: var(--primary-light); word-break: break-all;">
+            <a href="${data.data.downloadUrl}" target="_blank" class="download-link">
                 <i class="fas fa-download"></i> Download File
             </a>
         </div>
@@ -336,8 +407,8 @@ function showTestError(resultDiv, errorMessage, tips = null) {
         <div class="result-header">
             <span class="result-title">❌ Error</span>
         </div>
-        <p style="color: var(--accent-red);">${errorMessage}</p>
-        ${tips ? `<p style="color: var(--text-secondary); font-size: 0.9rem;">Tips: ${tips}</p>` : ''}
+        <p class="error-message">${errorMessage}</p>
+        ${tips ? `<p class="error-tips">Tips: ${tips}</p>` : ''}
     `;
     resultDiv.className = 'test-result error';
     resultDiv.style.display = 'block';
@@ -345,21 +416,14 @@ function showTestError(resultDiv, errorMessage, tips = null) {
 
 // Fungsi untuk copy ke clipboard
 window.copyToClipboard = function(text) {
-    navigator.clipboard.writeText(text).then(() => {
+    // Handle both string and JSON stringified text
+    const textToCopy = typeof text === 'string' ? text : JSON.stringify(text);
+    
+    navigator.clipboard.writeText(textToCopy).then(() => {
         // Tampilkan feedback bahwa teks telah disalin
         const toast = document.createElement('div');
+        toast.className = 'copy-toast';
         toast.textContent = 'Copied to clipboard!';
-        toast.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: var(--primary);
-            color: white;
-            padding: 10px 15px;
-            border-radius: 5px;
-            z-index: 1000;
-            font-size: 0.9rem;
-        `;
         document.body.appendChild(toast);
         
         setTimeout(() => {
@@ -367,6 +431,7 @@ window.copyToClipboard = function(text) {
         }, 2000);
     }).catch(err => {
         console.error('Failed to copy: ', err);
+        alert('Gagal menyalin teks: ' + err.message);
     });
 };
 
