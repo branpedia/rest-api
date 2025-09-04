@@ -107,7 +107,7 @@
                     <div class="parameter__name required">url<span>&nbsp;*</span></div>
                     <div class="input-group">
                         <input type="text" id="testUrlHome" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlHome', 'testResultHome', '/api/mediafire')">
+                        <button class="test-btn" onclick="testEndpoint('testUrlHome', 'testResultHome')">
                             <i class="fas fa-bolt"></i> Test
                         </button>
                     </div>
@@ -173,7 +173,7 @@
                     <div class="parameter__name required">url<span>&nbsp;*</span></div>
                     <div class="input-group">
                         <input type="text" id="testUrlDashboard" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlDashboard', 'testResultDashboard', '/api/mediafire')">
+                        <button class="test-btn" onclick="testEndpoint('testUrlDashboard', 'testResultDashboard')">
                             <i class="fas fa-bolt"></i> Test
                         </button>
                     </div>
@@ -257,19 +257,106 @@ curl -X 'GET' \
                 <div class="parameter__name required">url<span>&nbsp;*</span></div>
                 <div class="input-group">
                     <input type="text" id="testUrlDocs" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                    <button class="test-btn" onclick="testEndpoint('testUrlDocs', 'testResultDocs', '/api/mediafire')">
+                    <button class="test-btn" onclick="testEndpoint('testUrlDocs', 'testResultDocs')">
                         <i class="fas fa-bolt"></i> Test Endpoint
                     </button>
                 </div>
                 <div id="testResultDocs" class="test-result"></div>
             </div>
+            
+            <!-- Dokumentasi Instagram Downloader -->
+            <h2>Dokumentasi API Instagram Downloader</h2>
+            
+            <h3>Pengenalan</h3>
+            <p>API Instagram Downloader memungkinkan Anda untuk mengunduh konten dari Instagram seperti foto, video, dan IGTV. API ini berguna untuk mengintegrasikan fungsi download Instagram ke dalam aplikasi Anda.</p>
+            
+            <h3>Authentication</h3>
+            <p>Untuk saat ini, API ini tidak memerlukan authentication. Namun, untuk penggunaan komersial atau volume tinggi, API key mungkin diperlukan di masa depan.</p>
+            
+            <h3>Endpoint</h3>
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="endpoint-method">GET</span>
+                    <span class="endpoint-url">/api/instagram?url={instagram_url}</span>
+                    <button class="copy-btn" data-endpoint="/api/instagram?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
+                </div>
+            </div>
+            
+            <h3>Parameter</h3>
+            <p>Parameter yang diperlukan:</p>
+            <ul>
+                <li><strong>url</strong> (string) - URL Instagram yang ingin diambil kontennya</li>
+            </ul>
+            
+            <h3>Contoh Penggunaan</h3>
+            <p>Contoh penggunaan dengan curl:</p>
+            <div class="code-block">
+curl -X 'GET' \
+  'https://your-vercel-app.vercel.app/api/instagram?url=https%3A%2F%2Fwww.instagram.com%2Fp%2FCs6Y8-0uL7h%2F' \
+  -H 'accept: application/json'
+            </div>
+            
+            <h3>Response</h3>
+            <p>Response JSON akan berisi:</p>
+            <div class="endpoint">
+                <div class="response">
+                    <div class="response-header">
+                        <span class="response-title">Response</span>
+                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
+                    </div>
+{
+  "success": true,
+  "data": {
+    "type": "video",
+    "caption": "Caption dari postingan Instagram",
+    "downloadUrl": "https://api.branpedia.com/download/instagram/...",
+    "thumbnail": "https://api.branpedia.com/thumbnail/instagram/...",
+    "duration": "0:15",
+    "size": "3.2MB"
+  }
+}
+                </div>
+            </div>
+            
+            <h3>Error Handling</h3>
+            <p>Jika terjadi error, response akan mengembalikan success false dan pesan error:</p>
+            <div class="endpoint">
+                <div class="response">
+                    <div class="response-header">
+                        <span class="response-title">Error Response</span>
+                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
+                    </div>
+{
+  "success": false,
+  "error": "Invalid Instagram URL"
+}
+                </div>
+            </div>
+            
+            <!-- Test Form untuk Instagram -->
+            <div class="test-form">
+                <h3>Test API Instagram</h3>
+                <div class="parameter__name required">url<span>&nbsp;*</span></div>
+                <div class="input-group">
+                    <input type="text" id="testUrlInstagramDocs" placeholder="https://www.instagram.com/p/Cs6Y8-0uL7h/" class="url-input">
+                    <button class="test-btn" onclick="testEndpoint('testUrlInstagramDocs', 'testResultInstagramDocs', '/api/instagram')">
+                        <i class="fas fa-bolt"></i> Test Endpoint
+                    </button>
+                </div>
+                <div id="testResultInstagramDocs" class="test-result"></div>
+            </div>
         </div>
 
         <!-- API Endpoints Section -->
         <div id="api" class="section">
-            <h2>API Endpoints</h2>
-            <p>Memuat daftar API yang tersedia...</p>
-            <!-- API akan dimuat secara dinamis oleh api-loader.js -->
+            <h2>API Endpoints <span id="api-counter" class="api-counter">Loading...</span></h2>
+            
+            <div id="api-list">
+                <!-- API akan dimuat secara dinamis di sini oleh api-loader.js -->
+                <div class="loading-state">
+                    <i class="fas fa-spinner fa-spin"></i> Memuat daftar API...
+                </div>
+            </div>
         </div>
 
         <!-- About Section -->
@@ -306,6 +393,6 @@ curl -X 'GET' \
     </div>
 
     <script src="js/script.js"></script>
-    <script src="api/index.js"></script>
+    <script src="js/api-loader.js"></script>
 </body>
 </html>
