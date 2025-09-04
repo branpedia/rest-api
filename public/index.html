@@ -8,6 +8,46 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
+    <style>
+        /* Styling untuk bagian yang diubah */
+        .copy-result-btn, .copy-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: background 0.3s;
+        }
+        
+        .copy-result-btn:hover, .copy-btn:hover {
+            background: #3e8e41;
+        }
+        
+        .response-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        pre {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 0;
+        }
+        
+        .dark-mode pre {
+            background: #2d2d2d;
+            color: #f5f5f5;
+        }
+    </style>
 </head>
 <body>
     <div class="particles" id="particles"></div>
@@ -211,7 +251,7 @@
             <p>Contoh penggunaan dengan curl:</p>
             <div class="code-block">
 <pre>curl -X 'GET' \
-  'https://your-vercel-app.vercel.app/api/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fvj3al1c98u2zdr6%2FTerakomari_-_MD.zip%2Ffile' \
+  'https://rest-api-ten-smoky.vercel.app/api/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fvj3al1c98u2zdr6%2FTerakomari_-_MD.zip%2Ffile' \
   -H 'accept: application/json'</pre>
             </div>
             
@@ -413,5 +453,90 @@
     </div>
 
     <script src="js/script.js"></script>
+    <script>
+        // Fungsi untuk navigasi anchor
+        document.addEventListener('DOMContentLoaded', function() {
+            // Tangani klik pada menu sidebar
+            const menuLinks = document.querySelectorAll('.sidebar-menu a');
+            menuLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const targetId = this.getAttribute('href').substring(1);
+                    showSection(targetId);
+                    
+                    // Update menu aktif
+                    menuLinks.forEach(item => item.classList.remove('active'));
+                    this.classList.add('active');
+                });
+            });
+            
+            // Tangani URL dengan hash saat halaman dimuat
+            if (window.location.hash) {
+                const targetId = window.location.hash.substring(1);
+                showSection(targetId);
+                
+                // Update menu aktif
+                menuLinks.forEach(item => {
+                    item.classList.remove('active');
+                    if (item.getAttribute('href') === window.location.hash) {
+                        item.classList.add('active');
+                    }
+                });
+            }
+            
+            // Fungsi untuk menampilkan section tertentu
+            function showSection(sectionId) {
+                // Sembunyikan semua section
+                document.querySelectorAll('.section').forEach(section => {
+                    section.classList.remove('active');
+                });
+                
+                // Tampilkan section yang dipilih
+                const targetSection = document.getElementById(sectionId);
+                if (targetSection) {
+                    targetSection.classList.add('active');
+                }
+            }
+            
+            // Fungsi untuk copy result
+            const copyResultButtons = document.querySelectorAll('.copy-result-btn');
+            copyResultButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const responseContent = this.parentElement.nextElementSibling.textContent;
+                    navigator.clipboard.writeText(responseContent.trim())
+                        .then(() => {
+                            const originalText = this.innerHTML;
+                            this.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                            setTimeout(() => {
+                                this.innerHTML = originalText;
+                            }, 2000);
+                        })
+                        .catch(err => {
+                            console.error('Gagal menyalin teks: ', err);
+                        });
+                });
+            });
+            
+            // Fungsi untuk copy endpoint
+            const copyEndpointButtons = document.querySelectorAll('.copy-btn');
+            copyEndpointButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const endpoint = this.getAttribute('data-endpoint');
+                    const fullUrl = 'https://rest-api-ten-smoky.vercel.app' + endpoint;
+                    navigator.clipboard.writeText(fullUrl)
+                        .then(() => {
+                            const originalText = this.innerHTML;
+                            this.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                            setTimeout(() => {
+                                this.innerHTML = originalText;
+                            }, 2000);
+                        })
+                        .catch(err => {
+                            console.error('Gagal menyalin teks: ', err);
+                        });
+                });
+            });
+        });
+    </script>
 </body>
 </html>
