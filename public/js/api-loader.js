@@ -1,12 +1,29 @@
 // Fungsi untuk memuat API secara dinamis
 async function loadAPIs() {
+    const apiEndpointsSection = document.getElementById('api');
+    const apiCounter = document.getElementById('api-counter');
+    
+    if (!apiEndpointsSection) return;
+    
+    // Tampilkan status loading
+    apiEndpointsSection.innerHTML = `
+        <div class="loading-state">
+            <i class="fas fa-spinner fa-spin"></i> Memuat daftar API...
+        </div>
+    `;
+    
+    if (apiCounter) {
+        apiCounter.textContent = "Loading...";
+    }
+    
     try {
-        // Menggunakan fetch untuk mendapatkan daftar API
+        console.log('Mencoba memuat daftar API dari /api/list');
         const response = await fetch('/api/list');
         
         // Jika endpoint /api/list tidak tersedia, gunakan fallback
         if (!response.ok) {
             console.warn('Endpoint /api/list tidak tersedia, menggunakan fallback detection');
+            showError(apiEndpointsSection, 'Endpoint /api/list tidak tersedia, menggunakan fallback detection');
             await loadAPIsFallback();
             return;
         }
@@ -14,20 +31,31 @@ async function loadAPIs() {
         const result = await response.json();
         
         if (result.success) {
+            console.log('Berhasil memuat daftar API:', result.data);
             renderAPIs(result.data);
         } else {
-            console.error('Gagal memuat daftar API');
+            console.error('Gagal memuat daftar API:', result.error);
+            showError(apiEndpointsSection, 'Gagal memuat daftar API: ' + (result.error || 'Unknown error'));
             await loadAPIsFallback();
         }
     } catch (error) {
         console.error('Error:', error);
+        showError(apiEndpointsSection, 'Error: ' + error.message);
         await loadAPIsFallback();
     }
 }
 
 // Fallback function untuk mendeteksi API secara manual
 async function loadAPIsFallback() {
+    const apiEndpointsSection = document.getElementById('api');
+    const apiCounter = document.getElementById('api-counter');
+    
+    if (!apiEndpointsSection) return;
+    
     try {
+        console.log('Menggunakan fallback detection');
+        showError(apiEndpointsSection, 'Menggunakan fallback detection karena endpoint /api/list tidak tersedia');
+        
         // Daftar API default jika tidak bisa mendapatkan dari server
         const defaultAPIs = [
             { name: 'mediafire', path: '/api/mediafire' },
@@ -36,24 +64,57 @@ async function loadAPIsFallback() {
             { name: 'tiktok', path: '/api/tiktok' }
         ];
         
+        // Beri delay kecil untuk simulasi loading
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         renderAPIs(defaultAPIs);
     } catch (error) {
         console.error('Error dalam fallback detection:', error);
+        showError(apiEndpointsSection, 'Error dalam fallback detection: ' + error.message);
     }
+}
+
+// Fungsi untuk menampilkan error
+function showError(container, message) {
+    container.innerHTML = `
+        <div class="error-state">
+            <i class="fas fa-exclamation-triangle"></i>
+            <h3>Gagal Memuat Daftar API</h3>
+            <p>${message}</p>
+            <button onclick="loadAPIs()" class="btn btn-outline">
+                <i class="fas fa-redo"></i> Coba Lagi
+            </button>
+        </div>
+    `;
 }
 
 // Fungsi untuk merender API ke halaman
 function renderAPIs(apiList) {
     const apiEndpointsSection = document.getElementById('api');
+    const apiCounter = document.getElementById('api-counter');
+    
     if (!apiEndpointsSection) return;
     
+    // Update counter
+    if (apiCounter) {
+        apiCounter.textContent = `${apiList.length} Endpoints`;
+    }
+    
     // Hapus konten lama (kecuali judul)
-    const oldContent = apiEndpointsSection.querySelectorAll('.endpoint');
-    oldContent.forEach(element => {
-        if (!element.closest('h3')) {
-            element.remove();
-        }
-    });
+    const oldContent = apiEndpointsSection.querySelectorAll('.endpoint, .loading-state, .error-state');
+    oldContent.forEach(element => element.remove());
+    
+    // Jika tidak ada API
+    if (apiList.length === 0) {
+        apiEndpointsSection.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-inbox"></i>
+                <h3>Tidak Ada API yang Tersedia</h3>
+                <p>Tambahkan file API ke folder /api untuk melihatnya di sini.</p>
+            </div>
+        `;
+        return;
+    }
     
     // Kelompokkan API berdasarkan kategori
     const categories = {
@@ -180,7 +241,7 @@ window.testEndpoint = function(apiName, endpoint, params) {
     params.forEach(param => {
         const input = document.getElementById(`test${apiName}${param.name}`);
         if (param.required && (!input || !input.value.trim())) {
-            showError(resultDiv, `${param.name} tidak boleh kosong!`);
+            showTestError(resultDiv, `${param.name} tidak boleh kosong!`);
             hasError = true;
             return;
         }
@@ -194,16 +255,17 @@ window.testEndpoint = function(apiName, endpoint, params) {
     
     // Tampilkan loading
     const originalText = testBtn.innerHTML;
-    testBtn.innerHTML = '<span class="loading-spinner"></span> Loading...';
+    testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
     testBtn.disabled = true;
     
     resultDiv.innerHTML = `
         <div style="text-align: center; padding: 20px;">
-            <span class="loading-spinner"></span>
+            <i class="fas fa-spinner fa-spin"></i>
             <p>Memproses request...</p>
         </div>
     `;
     resultDiv.className = 'test-result';
+    resultDiv.style.display = 'block';
     
     // Build API URL
     let apiUrl = `${window.location.origin}${endpoint}`;
@@ -230,21 +292,21 @@ window.testEndpoint = function(apiName, endpoint, params) {
             
             // Tampilkan hasil
             if (data.success) {
-                showSuccess(resultDiv, data);
+                showTestSuccess(resultDiv, data);
             } else {
-                showError(resultDiv, data.error, data.tips);
+                showTestError(resultDiv, data.error, data.tips);
             }
         })
         .catch(error => {
             // Kembalikan tampilan tombol
             testBtn.innerHTML = originalText;
             testBtn.disabled = false;
-            showError(resultDiv, 'Error: ' + error.message);
+            showTestError(resultDiv, 'Error: ' + error.message);
         });
 };
 
 // Fungsi untuk menampilkan hasil sukses
-function showSuccess(resultDiv, data) {
+function showTestSuccess(resultDiv, data) {
     const formattedData = JSON.stringify(data, null, 2);
     const escapedData = formattedData.replace(/'/g, "\\'");
     
@@ -265,10 +327,11 @@ function showSuccess(resultDiv, data) {
         ` : ''}
     `;
     resultDiv.className = 'test-result success';
+    resultDiv.style.display = 'block';
 }
 
-// Fungsi untuk menampilkan error
-function showError(resultDiv, errorMessage, tips = null) {
+// Fungsi untuk menampilkan error pada test
+function showTestError(resultDiv, errorMessage, tips = null) {
     resultDiv.innerHTML = `
         <div class="result-header">
             <span class="result-title">❌ Error</span>
@@ -277,6 +340,7 @@ function showError(resultDiv, errorMessage, tips = null) {
         ${tips ? `<p style="color: var(--text-secondary); font-size: 0.9rem;">Tips: ${tips}</p>` : ''}
     `;
     resultDiv.className = 'test-result error';
+    resultDiv.style.display = 'block';
 }
 
 // Fungsi untuk copy ke clipboard
