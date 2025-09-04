@@ -73,11 +73,9 @@ document.querySelectorAll('.copy-btn').forEach(button => {
 // Copy result functionality
 document.querySelectorAll('.copy-result-btn').forEach(button => {
     button.addEventListener('click', function() {
-        const responseContent = this.closest('.response').textContent.trim();
-        // Remove the "Response" text and button text
-        const jsonContent = responseContent.replace('Response', '').replace('Copy Result', '').trim();
+        const responseContent = this.closest('.response').querySelector('pre').textContent.trim();
         
-        navigator.clipboard.writeText(jsonContent).then(() => {
+        navigator.clipboard.writeText(responseContent).then(() => {
             const originalText = this.innerHTML;
             this.innerHTML = '<i class="fas fa-check"></i> Copied!';
             setTimeout(() => {
@@ -158,14 +156,14 @@ function showSuccess(resultDiv, data) {
     const formattedData = JSON.stringify(data, null, 2);
     
     resultDiv.innerHTML = `
-        <div class="result-header">
-            <span class="result-title">✅ Success</span>
-            <button class="copy-btn" onclick="copyToClipboard('${data.data.downloadUrl}')">
-                <i class="fas fa-copy"></i> Copy URL
-            </button>
+        <div class="response">
+            <div class="response-header">
+                <span class="response-title">Response</span>
+                <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
+            </div>
+            <pre>${formattedData}</pre>
         </div>
-        <pre>${formattedData}</pre>
-        ${data.data.downloadUrl ? `
+        ${data.data && data.data.downloadUrl ? `
         <div style="margin-top: 10px;">
             <a href="${data.data.downloadUrl}" target="_blank" style="color: var(--primary-light); word-break: break-all;">
                 <i class="fas fa-download"></i> Download File
@@ -174,18 +172,33 @@ function showSuccess(resultDiv, data) {
         ` : ''}
     `;
     resultDiv.className = 'test-result success';
+    
+    // Tambahkan event listener untuk tombol copy result yang baru dibuat
+    const copyBtn = resultDiv.querySelector('.copy-result-btn');
+    copyBtn.addEventListener('click', function() {
+        navigator.clipboard.writeText(formattedData).then(() => {
+            const originalText = this.innerHTML;
+            this.innerHTML = '<i class="fas fa-check"></i> Copied!';
+            setTimeout(() => {
+                this.innerHTML = originalText;
+            }, 2000);
+        });
+    });
 }
 
 // Fungsi untuk menampilkan error
 function showError(resultDiv, error, tips = '') {
     resultDiv.innerHTML = `
-        <div class="result-header">
-            <span class="result-title">❌ Error</span>
+        <div class="response">
+            <div class="response-header">
+                <span class="response-title">Error Response</span>
+            </div>
+            <pre>{
+  "success": false,
+  "error": "${error}"
+}</pre>
         </div>
-        <div style="color: var(--danger);">
-            <p>${error}</p>
-            ${tips ? `<p><strong>Tips:</strong> ${tips}</p>` : ''}
-        </div>
+        ${tips ? `<div style="color: var(--danger); margin-top: 10px;"><strong>Tips:</strong> ${tips}</div>` : ''}
     `;
     resultDiv.className = 'test-result error';
 }
