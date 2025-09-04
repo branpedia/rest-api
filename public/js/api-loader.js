@@ -1,139 +1,45 @@
 // Fungsi untuk memuat API secara dinamis
 async function loadAPIs() {
     try {
+        // Menggunakan fetch untuk mendapatkan daftar API
         const response = await fetch('/api/list');
+        
+        // Jika endpoint /api/list tidak tersedia, gunakan fallback
+        if (!response.ok) {
+            console.warn('Endpoint /api/list tidak tersedia, menggunakan fallback detection');
+            await loadAPIsFallback();
+            return;
+        }
+        
         const result = await response.json();
         
         if (result.success) {
             renderAPIs(result.data);
         } else {
             console.error('Gagal memuat daftar API');
-            showFallbackAPIs();
+            await loadAPIsFallback();
         }
     } catch (error) {
         console.error('Error:', error);
-        showFallbackAPIs();
+        await loadAPIsFallback();
     }
 }
 
-// Fungsi untuk menampilkan API fallback jika gagal memuat
-function showFallbackAPIs() {
-    const apiEndpointsSection = document.getElementById('api');
-    if (!apiEndpointsSection) return;
-    
-    apiEndpointsSection.innerHTML = `
-        <h2>API Endpoints</h2>
-        <p>Gagal memuat daftar API. Menampilkan daftar default...</p>
+// Fallback function untuk mendeteksi API secara manual
+async function loadAPIsFallback() {
+    try {
+        // Daftar API default jika tidak bisa mendapatkan dari server
+        const defaultAPIs = [
+            { name: 'mediafire', path: '/api/mediafire' },
+            { name: 'youtube', path: '/api/youtube' },
+            { name: 'instagram', path: '/api/instagram' },
+            { name: 'tiktok', path: '/api/tiktok' }
+        ];
         
-        <h3>Downloader</h3>
-        <div class="endpoint">
-            <div class="endpoint-header">
-                <span class="endpoint-method">GET</span>
-                <span class="endpoint-url">/api/mediafire?url={mediafire_url}</span>
-                <button class="copy-btn" data-endpoint="/api/mediafire?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
-            </div>
-            <div class="response">
-                <div class="response-header">
-                    <span class="response-title">Response</span>
-                    <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
-                </div>
-{
-  "success": true,
-  "data": {
-    "name": "Terakomari - MD.zip",
-    "size": "6.78MB",
-    "extension": "zip",
-    "uploaded": "2024-02-22 07:29:23",
-    "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
-  }
-}
-            </div>
-            
-            <div class="test-form">
-                <h4>Test Endpoint</h4>
-                <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                <div class="input-group">
-                    <input type="text" id="testUrlMediafire" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                    <button class="test-btn" onclick="testEndpoint('testUrlMediafire', 'testResultMediafire', '/api/mediafire')">
-                        <i class="fas fa-bolt"></i> Test
-                    </button>
-                </div>
-                <div id="testResultMediafire" class="test-result"></div>
-            </div>
-        </div>
-        
-        <div class="endpoint">
-            <div class="endpoint-header">
-                <span class="endpoint-method">GET</span>
-                <span class="endpoint-url">/api/youtube?url={youtube_url}</span>
-                <button class="copy-btn" data-endpoint="/api/youtube?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
-            </div>
-            <div class="response">
-                <div class="response-header">
-                    <span class="response-title">Response</span>
-                    <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
-                </div>
-{
-  "success": true,
-  "data": {
-    "title": "Contoh Video YouTube",
-    "duration": "5:23",
-    "thumbnail": "https://i.ytimg.com/vi/.../default.jpg",
-    "downloadUrl": "https://api.branpedia.com/download/youtube/..."
-  }
-}
-            </div>
-            
-            <div class="test-form">
-                <h4>Test Endpoint</h4>
-                <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                <div class="input-group">
-                    <input type="text" id="testUrlYoutube" placeholder="https://www.youtube.com/watch?v=abc123" class="url-input">
-                    <button class="test-btn" onclick="testEndpoint('testUrlYoutube', 'testResultYoutube', '/api/youtube')">
-                        <i class="fas fa-bolt"></i> Test
-                    </button>
-                </div>
-                <div id="testResultYoutube" class="test-result"></div>
-            </div>
-        </div>
-        
-        <h3>AI Services</h3>
-        <div class="endpoint">
-            <div class="endpoint-header">
-                <span class="endpoint-method">GET</span>
-                <span class="endpoint-url">/api/ai/toanime</span>
-                <button class="copy-btn" data-endpoint="/api/ai/toanime"><i class="fas fa-copy"></i> Copy Endpoint</button>
-            </div>
-            <div class="response">
-                <div class="response-header">
-                    <span class="response-title">Response</span>
-                    <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
-                </div>
-{
-  "success": true,
-  "data": {
-    "original": "base64_image",
-    "anime": "base64_image"
-  }
-}
-            </div>
-            
-            <div class="test-form">
-                <h4>Test Endpoint</h4>
-                <div class="parameter__name">image_url (optional)</div>
-                <div class="input-group">
-                    <input type="text" id="testUrlAnime" placeholder="https://example.com/image.jpg" class="url-input">
-                    <button class="test-btn" onclick="testEndpoint('testUrlAnime', 'testResultAnime', '/api/ai/toanime')">
-                        <i class="fas fa-bolt"></i> Test
-                    </button>
-                </div>
-                <div id="testResultAnime" class="test-result"></div>
-            </div>
-        </div>
-    `;
-    
-    // Inisialisasi event listeners untuk tombol copy
-    initCopyButtons();
+        renderAPIs(defaultAPIs);
+    } catch (error) {
+        console.error('Error dalam fallback detection:', error);
+    }
 }
 
 // Fungsi untuk merender API ke halaman
@@ -142,9 +48,9 @@ function renderAPIs(apiList) {
     if (!apiEndpointsSection) return;
     
     // Hapus konten lama (kecuali judul)
-    const oldContent = apiEndpointsSection.querySelectorAll('.endpoint, h3, p');
+    const oldContent = apiEndpointsSection.querySelectorAll('.endpoint');
     oldContent.forEach(element => {
-        if (!element.closest('h2')) {
+        if (!element.closest('h3')) {
             element.remove();
         }
     });
@@ -159,9 +65,11 @@ function renderAPIs(apiList) {
     apiList.forEach(api => {
         // Tentukan kategori berdasarkan nama API
         if (api.name.includes('mediafire') || api.name.includes('youtube') || 
-            api.name.includes('instagram') || api.name.includes('tiktok')) {
+            api.name.includes('instagram') || api.name.includes('tiktok') ||
+            api.name.includes('download')) {
             categories['Downloader'].push(api);
-        } else if (api.name.includes('ai') || api.name.includes('toanime')) {
+        } else if (api.name.includes('ai') || api.name.includes('toanime') ||
+                  api.name.includes('chatgpt')) {
             categories['AI Services'].push(api);
         } else {
             categories['Other'].push(api);
@@ -181,9 +89,6 @@ function renderAPIs(apiList) {
             });
         }
     }
-    
-    // Inisialisasi event listeners untuk tombol copy
-    initCopyButtons();
 }
 
 // Fungsi untuk membuat elemen endpoint
@@ -191,62 +96,48 @@ function createEndpointElement(api) {
     const endpointDiv = document.createElement('div');
     endpointDiv.className = 'endpoint';
     
-    // Dapatkan dokumentasi API jika ada
+    // Dapatkan parameter default berdasarkan nama API
     let method = 'GET';
-    let params = [{ name: 'url', required: true }];
+    let params = [];
     
-    // Ambil dokumentasi API
-    fetch(`/api/docs/${api.name}`)
-        .then(response => {
-            if (!response.ok) throw new Error('Dokumentasi tidak ditemukan');
-            return response.json();
-        })
-        .then(result => {
-            if (result.success) {
-                method = result.data.method || method;
-                params = result.data.parameters || params;
-                
-                // Update elemen dengan informasi yang lebih spesifik
-                const methodElement = endpointDiv.querySelector('.endpoint-method');
-                if (methodElement) {
-                    methodElement.textContent = method;
-                }
-                
-                const urlElement = endpointDiv.querySelector('.endpoint-url');
-                if (urlElement) {
-                    let urlText = `${api.path}?`;
-                    params.forEach((param, index) => {
-                        urlText += `${param.name}={${param.name}}`;
-                        if (index < params.length - 1) {
-                            urlText += '&';
-                        }
-                    });
-                    urlElement.textContent = urlText;
-                }
-                
-                // Update tombol copy
-                const copyBtn = endpointDiv.querySelector('.copy-btn');
-                if (copyBtn) {
-                    let copyEndpoint = `${api.path}?`;
-                    params.forEach((param, index) => {
-                        copyEndpoint += `${param.name}=`;
-                        if (index < params.length - 1) {
-                            copyEndpoint += '&';
-                        }
-                    });
-                    copyBtn.setAttribute('data-endpoint', copyEndpoint);
-                }
+    if (api.name.includes('mediafire') || api.name.includes('youtube') || 
+        api.name.includes('instagram') || api.name.includes('tiktok')) {
+        params = [{ name: 'url', required: true }];
+    } else if (api.name.includes('toanime')) {
+        params = [{ name: 'image_url', required: false }];
+    }
+    
+    // Bangun URL dengan parameter
+    let urlWithParams = api.path;
+    if (params.length > 0) {
+        urlWithParams += '?';
+        params.forEach((param, index) => {
+            urlWithParams += `${param.name}={${param.name}}`;
+            if (index < params.length - 1) {
+                urlWithParams += '&';
             }
-        })
-        .catch(error => {
-            console.error(`Gagal memuat dokumentasi untuk ${api.name}:`, error);
         });
+    }
+    
+    // Bangun form input berdasarkan parameter
+    let formInputs = '';
+    params.forEach(param => {
+        formInputs += `
+            <div class="parameter__name ${param.required ? 'required' : ''}">
+                ${param.name}${param.required ? '<span>&nbsp;*</span>' : ''}
+            </div>
+            <div class="input-group">
+                <input type="text" id="test${api.name}${param.name}" 
+                       placeholder="Masukkan ${param.name}" class="url-input">
+            </div>
+        `;
+    });
     
     endpointDiv.innerHTML = `
         <div class="endpoint-header">
             <span class="endpoint-method">${method}</span>
-            <span class="endpoint-url">${api.path}?url={url}</span>
-            <button class="copy-btn" data-endpoint="${api.path}?url=">
+            <span class="endpoint-url">${urlWithParams}</span>
+            <button class="copy-btn" data-endpoint="${api.path}">
                 <i class="fas fa-copy"></i> Copy Endpoint
             </button>
         </div>
@@ -264,10 +155,9 @@ function createEndpointElement(api) {
         </div>
         <div class="test-form">
             <h4>Test Endpoint</h4>
-            <div class="parameter__name required">url<span>&nbsp;*</span></div>
+            ${formInputs}
             <div class="input-group">
-                <input type="text" id="testUrl${api.name}" placeholder="Masukkan URL" class="url-input">
-                <button class="test-btn" onclick="testEndpoint('testUrl${api.name}', 'testResult${api.name}', '${api.path}')">
+                <button class="test-btn" onclick="testEndpoint('${api.name}', '${api.path}', ${JSON.stringify(params)})">
                     <i class="fas fa-bolt"></i> Test
                 </button>
             </div>
@@ -278,19 +168,29 @@ function createEndpointElement(api) {
     return endpointDiv;
 }
 
-// Fungsi untuk test endpoint
-window.testEndpoint = function(inputId, resultId, endpoint = '/api/mediafire') {
-    const urlInput = document.getElementById(inputId);
-    const resultDiv = document.getElementById(resultId);
-    const testBtn = urlInput.nextElementSibling;
+// Fungsi untuk test endpoint (diperbarui)
+window.testEndpoint = function(apiName, endpoint, params) {
+    const resultDiv = document.getElementById(`testResult${apiName}`);
+    const testBtn = document.querySelector(`#testResult${apiName}`).previousElementSibling.querySelector('.test-btn');
     
-    const url = urlInput.value.trim();
+    // Bangun query parameters
+    const queryParams = {};
+    let hasError = false;
     
-    // Validasi input
-    if (!url && endpoint !== '/api/ai/toanime') {
-        showError(resultDiv, 'URL tidak boleh kosong!');
-        return;
-    }
+    params.forEach(param => {
+        const input = document.getElementById(`test${apiName}${param.name}`);
+        if (param.required && (!input || !input.value.trim())) {
+            showError(resultDiv, `${param.name} tidak boleh kosong!`);
+            hasError = true;
+            return;
+        }
+        
+        if (input && input.value.trim()) {
+            queryParams[param.name] = input.value.trim();
+        }
+    });
+    
+    if (hasError) return;
     
     // Tampilkan loading
     const originalText = testBtn.innerHTML;
@@ -307,8 +207,12 @@ window.testEndpoint = function(inputId, resultId, endpoint = '/api/mediafire') {
     
     // Build API URL
     let apiUrl = `${window.location.origin}${endpoint}`;
-    if (url) {
-        apiUrl += `?url=${encodeURIComponent(url)}`;
+    const queryString = Object.keys(queryParams)
+        .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(queryParams[key])}`)
+        .join('&');
+    
+    if (queryString) {
+        apiUrl += `?${queryString}`;
     }
     
     // Panggil API
@@ -364,58 +268,43 @@ function showSuccess(resultDiv, data) {
 }
 
 // Fungsi untuk menampilkan error
-function showError(resultDiv, error, tips = null) {
+function showError(resultDiv, errorMessage, tips = null) {
     resultDiv.innerHTML = `
         <div class="result-header">
-            <span class="result-title error">❌ Error</span>
-            <button class="copy-btn" onclick="copyToClipboard('${error}')">
-                <i class="fas fa-copy"></i> Copy Error
-            </button>
+            <span class="result-title">❌ Error</span>
         </div>
-        <p class="error-message">${error}</p>
-        ${tips ? `<p class="error-tips">💡 Tips: ${tips}</p>` : ''}
+        <p style="color: var(--accent-red);">${errorMessage}</p>
+        ${tips ? `<p style="color: var(--text-secondary); font-size: 0.9rem;">Tips: ${tips}</p>` : ''}
     `;
     resultDiv.className = 'test-result error';
 }
 
 // Fungsi untuk copy ke clipboard
-function copyToClipboard(text) {
+window.copyToClipboard = function(text) {
     navigator.clipboard.writeText(text).then(() => {
-        // Tampilkan notifikasi
-        const notification = document.createElement('div');
-        notification.className = 'copy-notification';
-        notification.textContent = 'Copied to clipboard!';
-        document.body.appendChild(notification);
+        // Tampilkan feedback bahwa teks telah disalin
+        const toast = document.createElement('div');
+        toast.textContent = 'Copied to clipboard!';
+        toast.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--primary);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            z-index: 1000;
+            font-size: 0.9rem;
+        `;
+        document.body.appendChild(toast);
         
-        // Hilangkan notifikasi setelah 2 detik
         setTimeout(() => {
-            notification.remove();
+            document.body.removeChild(toast);
         }, 2000);
     }).catch(err => {
         console.error('Failed to copy: ', err);
     });
-}
-
-// Inisialisasi tombol copy
-function initCopyButtons() {
-    document.querySelectorAll('.copy-btn').forEach(button => {
-        button.addEventListener('click', function() {
-            const endpoint = this.getAttribute('data-endpoint');
-            const fullUrl = window.location.origin + endpoint;
-            copyToClipboard(fullUrl);
-        });
-    });
-    
-    document.querySelectorAll('.copy-result-btn').forEach(button => {
-        button.addEventListener('click', function() {
-            const responseElement = this.closest('.response');
-            const preElement = responseElement.querySelector('pre');
-            if (preElement) {
-                copyToClipboard(preElement.textContent);
-            }
-        });
-    });
-}
+};
 
 // Muat API saat halaman dimuat
 document.addEventListener('DOMContentLoaded', function() {
@@ -424,6 +313,23 @@ document.addEventListener('DOMContentLoaded', function() {
         loadAPIs();
     }
     
-    // Inisialisasi semua tombol copy
-    initCopyButtons();
+    // Tambahkan event listener untuk tombol copy endpoint
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('.copy-btn')) {
+            const button = e.target.closest('.copy-btn');
+            const endpoint = button.getAttribute('data-endpoint');
+            
+            if (endpoint) {
+                const fullUrl = window.location.origin + endpoint;
+                copyToClipboard(fullUrl);
+            }
+        }
+        
+        if (e.target.closest('.copy-result-btn')) {
+            const preElement = e.target.closest('.endpoint').querySelector('pre');
+            if (preElement) {
+                copyToClipboard(preElement.textContent);
+            }
+        }
+    });
 });
