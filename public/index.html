@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Branpedia REST API | Unlimited</title>
+    <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
@@ -411,95 +412,7 @@ curl -X 'GET' \
         </div>
     </div>
 
-    <script>
-        // Fungsi untuk menyalin teks ke clipboard
-        function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(() => {
-                alert('Teks berhasil disalin!');
-            }).catch(err => {
-                console.error('Gagal menyalin teks: ', err);
-            });
-        }
-
-        // Menambahkan event listener ke semua tombol salin
-        document.querySelectorAll('.copy-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const endpoint = this.getAttribute('data-endpoint');
-                copyToClipboard('https://your-vercel-app.vercel.app' + endpoint);
-            });
-        });
-
-        // Fungsi untuk navigasi menu sidebar
-        document.querySelectorAll('.sidebar-menu a').forEach(link => {
-            link.addEventListener('click', function(e) {
-                e.preventDefault();
-                const target = this.getAttribute('data-target');
-                
-                // Hapus kelas active dari semua menu
-                document.querySelectorAll('.sidebar-menu a').forEach(item => {
-                    item.classList.remove('active');
-                });
-                
-                // Tambahkan kelas active ke menu yang diklik
-                this.classList.add('active');
-                
-                // Sembunyikan semua section
-                document.querySelectorAll('.section').forEach(section => {
-                    section.classList.remove('active');
-                });
-                
-                // Tampilkan section yang sesuai
-                document.getElementById(target).classList.add('active');
-            });
-        });
-
-        // Toggle tema gelap/terang
-        const themeToggle = document.getElementById('themeToggle');
-        themeToggle.addEventListener('click', function() {
-            document.body.classList.toggle('dark-mode');
-            const icon = this.querySelector('i');
-            if (document.body.classList.contains('dark-mode')) {
-                icon.classList.remove('fa-moon');
-                icon.classList.add('fa-sun');
-            } else {
-                icon.classList.remove('fa-sun');
-                icon.classList.add('fa-moon');
-            }
-        });
-
-        // Toggle menu sidebar (untuk tampilan mobile)
-        const menuToggle = document.querySelector('.menu-toggle');
-        menuToggle.addEventListener('click', function() {
-            document.querySelector('.sidebar').classList.toggle('active');
-        });
-
-        // Fungsi test endpoint (simulasi)
-        function testEndpoint(inputId, resultId, endpoint = '/api/mediafire') {
-            const url = document.getElementById(inputId).value;
-            const resultElement = document.getElementById(resultId);
-            
-            if (!url) {
-                resultElement.innerHTML = '<div class="error">URL harus diisi!</div>';
-                return;
-            }
-            
-            resultElement.innerHTML = '<div class="loading">Menguji endpoint...</div>';
-            
-            // Simulasi request API
-            setTimeout(() => {
-                resultElement.innerHTML = `
-                    <div class="success">Request berhasil!</div>
-                    <pre>{
-  "success": true,
-  "data": {
-    "name": "Test File",
-    "size": "5.2MB",
-    "downloadUrl": "https://example.com/download"
-  }
-}</pre>
-                `;
-            }, 1500);
-        }
-    </script>
+    <script src="js/script.js"></script>
+    <script src="js/api-loader.js"></script>
 </body>
 </html>
