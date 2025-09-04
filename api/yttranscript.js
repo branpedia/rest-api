@@ -77,24 +77,55 @@ export default async function handler(req, res) {
     const $ = cheerio.load(html);
 
     let transcript = [];
+    let fullText = "";
 
-    $(".transcript-text .transcript-row").each((i, el) => {
-      let start = $(el).find(".start").text().trim();
-      let text = $(el).find(".text").text().trim();
+    // Mencoba dua selector yang berbeda
+    // 1. Coba selector berdasarkan contoh HTML yang diberikan
+    $(".transcript-segment").each((i, el) => {
+      let text = $(el).text().trim();
       if (text) {
-        transcript.push({ start, text });
+        transcript.push({ text });
+        fullText += text + " ";
       }
     });
+
+    // 2. Jika tidak ada hasil dengan selector pertama, coba selector alternatif
+    if (transcript.length === 0) {
+      $(".transcript-text .transcript-row").each((i, el) => {
+        let start = $(el).find(".start").text().trim();
+        let text = $(el).find(".text").text().trim();
+        if (text) {
+          transcript.push({ start, text });
+          fullText += text + " ";
+        }
+      });
+    }
+
+    // 3. Jika masih tidak ada hasil, coba selector umum
+    if (transcript.length === 0) {
+      $("[data-start]").each((i, el) => {
+        let text = $(el).text().trim();
+        if (text) {
+          transcript.push({ text });
+          fullText += text + " ";
+        }
+      });
+    }
 
     if (transcript.length === 0) {
       throw new Error("Transcript tidak ditemukan atau video tidak mendukung.");
     }
 
+    // Opsi 1: Kembalikan transcript lengkap dengan timestamp
+    // Opsi 2: Kembalikan hanya teks tanpa timestamp (sesuai permintaan)
+    const textOnly = fullText.trim();
+
     return res.status(200).json({
       success: true,
       videoId,
-      transcript,
-      total: transcript.length,
+      transcript: transcript, // transcript lengkap dengan timestamp
+      text: textOnly, // hanya teks tanpa timestamp
+      totalSegments: transcript.length,
     });
   } catch (error) {
     console.error("Error fetching transcript:", error.message);
