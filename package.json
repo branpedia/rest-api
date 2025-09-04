@@ -16,7 +16,8 @@
     "cloudscraper": "^4.6.0",
     "jsdom": "^22.1.0",
     "puppeteer": "^21.5.2",
-    "puppeteer-core": "^21.5.2"
+    "puppeteer-core": "^21.5.2",
+    "node-fetch": "^2.6.7"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
