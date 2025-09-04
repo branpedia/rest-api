@@ -87,9 +87,9 @@
                 <div class="response">
                     <div class="response-header">
                         <span class="response-title">Response</span>
-                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
+                        <button class="copy-result-btn" onclick="copyResult(this)"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-{
+                    <pre>{
   "success": true,
   "data": {
     "name": "Terakomari - MD.zip",
@@ -98,7 +98,7 @@
     "uploaded": "2024-02-22 07:29:23",
     "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
   }
-}
+}</pre>
                 </div>
                 
                 <!-- Form Input URL -->
@@ -153,9 +153,9 @@
                 <div class="response">
                     <div class="response-header">
                         <span class="response-title">Response</span>
-                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
+                        <button class="copy-result-btn" onclick="copyResult(this)"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-{
+                    <pre>{
   "success": true,
   "data": {
     "name": "Terakomari - MD.zip",
@@ -164,7 +164,7 @@
     "uploaded": "2024-02-22 07:29:23",
     "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
   }
-}
+}</pre>
                 </div>
                 
                 <!-- Form Input URL -->
@@ -221,9 +221,9 @@ curl -X 'GET' \
                 <div class="response">
                     <div class="response-header">
                         <span class="response-title">Response</span>
-                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
+                        <button class="copy-result-btn" onclick="copyResult(this)"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-{
+                    <pre>{
   "success": true,
   "data": {
     "name": "Terakomari - MD.zip",
@@ -232,7 +232,7 @@ curl -X 'GET' \
     "uploaded": "2024-02-22 07:29:23",
     "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
   }
-}
+}</pre>
                 </div>
             </div>
             
@@ -242,12 +242,12 @@ curl -X 'GET' \
                 <div class="response">
                     <div class="response-header">
                         <span class="response-title">Error Response</span>
-                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
+                        <button class="copy-result-btn" onclick="copyResult(this)"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-{
+                    <pre>{
   "success": false,
   "error": "Invalid MediaFire URL"
-}
+}</pre>
                 </div>
             </div>
             
@@ -279,9 +279,9 @@ curl -X 'GET' \
                 <div class="response">
                     <div class="response-header">
                         <span class="response-title">Response</span>
-                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
+                        <button class="copy-result-btn" onclick="copyResult(this)"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-{
+                    <pre>{
   "success": true,
   "data": {
     "name": "Terakomari - MD.zip",
@@ -290,7 +290,7 @@ curl -X 'GET' \
     "uploaded": "2024-02-22 07:29:23",
     "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
   }
-}
+}</pre>
                 </div>
                 
                 <!-- Form Input URL -->
@@ -316,9 +316,9 @@ curl -X 'GET' \
                 <div class="response">
                     <div class="response-header">
                         <span class="response-title">Response</span>
-                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
+                        <button class="copy-result-btn" onclick="copyResult(this)"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-{
+                    <pre>{
   "success": true,
   "data": {
     "title": "Contoh Video YouTube",
@@ -326,7 +326,7 @@ curl -X 'GET' \
     "thumbnail": "https://i.ytimg.com/vi/.../default.jpg",
     "downloadUrl": "https://api.branpedia.com/download/youtube/..."
   }
-}
+}</pre>
                 </div>
                 
                 <!-- Form Input URL untuk YouTube -->
@@ -353,15 +353,15 @@ curl -X 'GET' \
                 <div class="response">
                     <div class="response-header">
                         <span class="response-title">Response</span>
-                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
+                        <button class="copy-result-btn" onclick="copyResult(this)"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-{
+                    <pre>{
   "success": true,
   "data": {
     "original": "base64_image",
     "anime": "base64_image"
   }
-}
+}</pre>
                 </div>
                 
                 <!-- Form untuk AI Service -->
@@ -400,18 +400,146 @@ curl -X 'GET' \
                 <div class="response">
                     <div class="response-header">
                         <span class="response-title">Kontak Info</span>
-                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
+                        <button class="copy-result-btn" onclick="copyResult(this)"><i class="fas fa-copy"></i> Copy Info</button>
                     </div>
-{
+                    <pre>{
   "email": "support@branpedia.com",
   "website": "https://branpedia.com",
   "documentation": "https://docs.branpedia.com"
-}
+}</pre>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="js/script.js"></script>
+    <script>
+        // Fungsi untuk menyalin hasil response
+        function copyResult(button) {
+            // Temukan elemen pre yang berisi JSON
+            const responseContainer = button.closest('.response');
+            const preElement = responseContainer.querySelector('pre');
+            
+            if (preElement) {
+                // Salin teks dari elemen pre
+                const textToCopy = preElement.textContent;
+                
+                // Gunakan Clipboard API untuk menyalin teks
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    // Ubah ikon sementara untuk menunjukkan berhasil disalin
+                    const icon = button.querySelector('i');
+                    const originalClass = icon.className;
+                    
+                    icon.className = 'fas fa-check';
+                    button.classList.add('copied');
+                    
+                    setTimeout(() => {
+                        icon.className = originalClass;
+                        button.classList.remove('copied');
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Gagal menyalin teks: ', err);
+                    alert('Gagal menyalin hasil. Silakan coba lagi.');
+                });
+            }
+        }
+        
+        // Fungsi untuk menguji endpoint (placeholder)
+        function testEndpoint(inputId, resultId, endpoint = '/api/mediafire') {
+            const url = document.getElementById(inputId).value;
+            const resultDiv = document.getElementById(resultId);
+            
+            if (!url) {
+                resultDiv.innerHTML = '<div class="error">URL harus diisi</div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<div class="loading">Menguji endpoint...</div>';
+            
+            // Simulasi request API (dalam implementasi nyata, ini akan menjadi fetch/axios call)
+            setTimeout(() => {
+                resultDiv.innerHTML = `
+                    <div class="success">Permintaan berhasil!</div>
+                    <pre>{
+  "success": true,
+  "data": {
+    "name": "Contoh File.zip",
+    "size": "5.2MB",
+    "extension": "zip",
+    "uploaded": "2024-02-22 07:29:23",
+    "downloadUrl": "https://download.example.com/.../Contoh+File.zip"
+  }
+}</pre>
+                `;
+            }, 1500);
+        }
+        
+        // Kode untuk navigasi sidebar dan fungsi lainnya
+        document.addEventListener('DOMContentLoaded', function() {
+            // Navigasi sidebar
+            const menuLinks = document.querySelectorAll('.sidebar-menu a');
+            const sections = document.querySelectorAll('.section');
+            
+            menuLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const target = this.getAttribute('data-target');
+                    
+                    // Update active menu item
+                    menuLinks.forEach(item => item.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Show target section
+                    sections.forEach(section => {
+                        section.classList.remove('active');
+                        if (section.id === target) {
+                            section.classList.add('active');
+                        }
+                    });
+                });
+            });
+            
+            // Toggle theme
+            const themeToggle = document.getElementById('themeToggle');
+            if (themeToggle) {
+                themeToggle.addEventListener('click', function() {
+                    document.body.classList.toggle('dark-theme');
+                    const icon = this.querySelector('i');
+                    if (document.body.classList.contains('dark-theme')) {
+                        icon.className = 'fas fa-sun';
+                    } else {
+                        icon.className = 'fas fa-moon';
+                    }
+                });
+            }
+            
+            // Toggle mobile menu
+            const menuToggle = document.querySelector('.menu-toggle');
+            if (menuToggle) {
+                menuToggle.addEventListener('click', function() {
+                    document.querySelector('.sidebar').classList.toggle('active');
+                });
+            }
+            
+            // Copy endpoint buttons
+            const copyButtons = document.querySelectorAll('.copy-btn');
+            copyButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const endpoint = this.getAttribute('data-endpoint');
+                    navigator.clipboard.writeText(endpoint).then(() => {
+                        const icon = this.querySelector('i');
+                        const originalClass = icon.className;
+                        
+                        icon.className = 'fas fa-check';
+                        this.classList.add('copied');
+                        
+                        setTimeout(() => {
+                            icon.className = originalClass;
+                            this.classList.remove('copied');
+                        }, 2000);
+                    });
+                });
+            });
+        });
+    </script>
 </body>
 </html>
