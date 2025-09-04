@@ -6,10 +6,11 @@
    Saluran Official: https://whatsapp.com/channel/0029VaR0ejN47Xe26WUarL3H
    ───────────────────── */
 
-import fetch from "node-fetch";
-import cheerio from "cheerio";
+// Import dependencies
+const fetch = require('node-fetch');
+const cheerio = require('cheerio');
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   // Set CORS headers
   res.setHeader("Access-Control-Allow-Credentials", true);
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -41,19 +42,27 @@ export default async function handler(req, res) {
   if (!url) {
     return res.status(400).json({
       success: false,
-      error:
-        "Parameter url is required. Example: /api/yttranscript?url=https://youtube.com/watch?v=XXXX",
+      error: "Parameter url is required. Example: /api/yttranscript?url=https://youtube.com/watch?v=XXXX",
+    });
+  }
+
+  // Decode URL parameter
+  let decodedUrl;
+  try {
+    decodedUrl = decodeURIComponent(url);
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      error: "Invalid URL encoding.",
     });
   }
 
   // Extract YouTube video ID
-  const idMatch = url.match(
-    /(?:v=|\/shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/
-  );
+  const idMatch = decodedUrl.match(/(?:v=|\/shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
   if (!idMatch) {
     return res.status(400).json({
       success: false,
-      error: "Gagal mengambil ID YouTube dari link!",
+      error: "Failed to extract YouTube video ID from the URL.",
     });
   }
   const videoId = idMatch[1];
@@ -64,43 +73,69 @@ export default async function handler(req, res) {
   try {
     const response = await fetch(transcriptUrl, {
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:119.0) Gecko/20100101 Firefox/119.0",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error("Gagal mengakses transcript!");
-    }
-
-    const html = await response.text();
-    const $ = cheerio.load(html);
-
-    let transcript = [];
-
-    $(".transcript-text .transcript-row").each((i, el) => {
-      let start = $(el).find(".start").text().trim();
-      let text = $(el).find(".text").text().trim();
-      if (text) {
-        transcript.push({ start, text });
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
       }
     });
 
-    if (transcript.length === 0) {
-      throw new Error("Transcript tidak ditemukan atau video tidak mendukung.");
+    if (!response.ok) {
+      throw new Error(`Failed to access transcript: HTTP ${response.status}`);
     }
+
+    const html = await response.text();
+    
+    // Pastikan cheerio berhasil load
+    if (typeof cheerio.load !== 'function') {
+      throw new Error('Cheerio load function is not available');
+    }
+    
+    const $ = cheerio.load(html);
+
+    let transcriptText = [];
+    
+    // Parse HTML dengan selector yang benar
+    $("#transcript span.transcript-segment").each((i, el) => {
+      let text = $(el).text().trim();
+      if (text) transcriptText.push(text);
+    });
+
+    // Jika tidak ditemukan dengan selector pertama, coba selector alternatif
+    if (transcriptText.length === 0) {
+      $("span.transcript-segment").each((i, el) => {
+        let text = $(el).text().trim();
+        if (text) transcriptText.push(text);
+      });
+    }
+
+    // Coba selector berdasarkan HTML yang Anda berikan
+    if (transcriptText.length === 0) {
+      $(".transcript-segment").each((i, el) => {
+        let text = $(el).text().trim();
+        if (text) transcriptText.push(text);
+      });
+    }
+
+    if (transcriptText.length === 0) {
+      throw new Error("Transcript not found for this video. The video may not have captions or the website structure may have changed.");
+    }
+
+    const result = transcriptText.join(" ");
 
     return res.status(200).json({
       success: true,
       videoId,
-      transcript,
-      total: transcript.length,
+      transcript: result,
+      totalSegments: transcriptText.length,
+      message: "Transcript retrieved successfully."
     });
   } catch (error) {
     console.error("Error fetching transcript:", error.message);
     return res.status(500).json({
       success: false,
-      error: "Gagal mengambil transcript: " + error.message,
+      error: "Failed to retrieve transcript: " + error.message,
+      videoId: videoId || "unknown"
     });
   }
 }
+
+// Export handler untuk Vercel/Netlify
+module.exports = handler;
