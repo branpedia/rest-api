@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Branpedia REST API | Unlimited</title>
+    <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
@@ -88,7 +89,7 @@
                         <span class="response-title">Response</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-                    <pre>{
+{
   "success": true,
   "data": {
     "name": "Terakomari - MD.zip",
@@ -97,7 +98,7 @@
     "uploaded": "2024-02-22 07:29:23",
     "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
   }
-}</pre>
+}
                 </div>
                 
                 <!-- Form Input URL -->
@@ -154,7 +155,7 @@
                         <span class="response-title">Response</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-                    <pre>{
+{
   "success": true,
   "data": {
     "name": "Terakomari - MD.zip",
@@ -163,7 +164,7 @@
     "uploaded": "2024-02-22 07:29:23",
     "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
   }
-}</pre>
+}
                 </div>
                 
                 <!-- Form Input URL -->
@@ -209,9 +210,9 @@
             <h3>Contoh Penggunaan</h3>
             <p>Contoh penggunaan dengan curl:</p>
             <div class="code-block">
-                <pre>curl -X 'GET' \
+curl -X 'GET' \
   'https://your-vercel-app.vercel.app/api/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fvj3al1c98u2zdr6%2FTerakomari_-_MD.zip%2Ffile' \
-  -H 'accept: application/json'</pre>
+  -H 'accept: application/json'
             </div>
             
             <h3>Response</h3>
@@ -222,7 +223,7 @@
                         <span class="response-title">Response</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-                    <pre>{
+{
   "success": true,
   "data": {
     "name": "Terakomari - MD.zip",
@@ -231,7 +232,7 @@
     "uploaded": "2024-02-22 07:29:23",
     "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
   }
-}</pre>
+}
                 </div>
             </div>
             
@@ -243,10 +244,10 @@
                         <span class="response-title">Error Response</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-                    <pre>{
+{
   "success": false,
   "error": "Invalid MediaFire URL"
-}</pre>
+}
                 </div>
             </div>
             
@@ -262,97 +263,118 @@
                 </div>
                 <div id="testResultDocs" class="test-result"></div>
             </div>
+        </div>
+
+        <!-- API Endpoints Section -->
+        <div id="api" class="section">
+            <h2>API Endpoints</h2>
             
-            <!-- Dokumentasi Instagram Downloader -->
-            <h2>Dokumentasi API Instagram Downloader</h2>
-            
-            <h3>Pengenalan</h3>
-            <p>API Instagram Downloader memungkinkan Anda untuk mengunduh konten dari Instagram seperti foto, video, dan IGTV. API ini berguna untuk mengintegrasikan fungsi download Instagram ke dalam aplikasi Anda.</p>
-            
-            <h3>Authentication</h3>
-            <p>Untuk saat ini, API ini tidak memerlukan authentication. Namun, untuk penggunaan komersial atau volume tinggi, API key mungkin diperlukan di masa depan.</p>
-            
-            <h3>Endpoint</h3>
+            <h3>Downloader</h3>
             <div class="endpoint">
                 <div class="endpoint-header">
                     <span class="endpoint-method">GET</span>
-                    <span class="endpoint-url">/api/instagram?url={instagram_url}</span>
-                    <button class="copy-btn" data-endpoint="/api/instagram?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
+                    <span class="endpoint-url">/api/mediafire?url={mediafire_url}</span>
+                    <button class="copy-btn" data-endpoint="/api/mediafire?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
                 </div>
-            </div>
-            
-            <h3>Parameter</h3>
-            <p>Parameter yang diperlukan:</p>
-            <ul>
-                <li><strong>url</strong> (string) - URL Instagram yang ingin diambil kontennya</li>
-            </ul>
-            
-            <h3>Contoh Penggunaan</h3>
-            <p>Contoh penggunaan dengan curl:</p>
-            <div class="code-block">
-                <pre>curl -X 'GET' \
-  'https://your-vercel-app.vercel.app/api/instagram?url=https%3A%2F%2Fwww.instagram.com%2Fp%2FCs6Y8-0uL7h%2F' \
-  -H 'accept: application/json'</pre>
-            </div>
-            
-            <h3>Response</h3>
-            <p>Response JSON akan berisi:</p>
-            <div class="endpoint">
                 <div class="response">
                     <div class="response-header">
                         <span class="response-title">Response</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-                    <pre>{
+{
   "success": true,
   "data": {
-    "type": "video",
-    "caption": "Caption dari postingan Instagram",
-    "downloadUrl": "https://api.branpedia.com/download/instagram/...",
-    "thumbnail": "https://api.branpedia.com/thumbnail/instagram/...",
-    "duration": "0:15",
-    "size": "3.2MB"
+    "name": "Terakomari - MD.zip",
+    "size": "6.78MB",
+    "extension": "zip",
+    "uploaded": "2024-02-22 07:29:23",
+    "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
   }
-}</pre>
+}
+                </div>
+                
+                <!-- Form Input URL -->
+                <div class="test-form">
+                    <h4>Test Endpoint</h4>
+                    <div class="parameter__name required">url<span>&nbsp;*</span></div>
+                    <div class="input-group">
+                        <input type="text" id="testUrlMediafire" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
+                        <button class="test-btn" onclick="testEndpoint('testUrlMediafire', 'testResultMediafire')">
+                            <i class="fas fa-bolt"></i> Test
+                        </button>
+                    </div>
+                    <div id="testResultMediafire" class="test-result"></div>
                 </div>
             </div>
             
-            <h3>Error Handling</h3>
-            <p>Jika terjadi error, response akan mengembalikan success false dan pesan error:</p>
             <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="endpoint-method">GET</span>
+                    <span class="endpoint-url">/api/youtube?url={youtube_url}</span>
+                    <button class="copy-btn" data-endpoint="/api/youtube?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
+                </div>
                 <div class="response">
                     <div class="response-header">
-                        <span class="response-title">Error Response</span>
+                        <span class="response-title">Response</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
                     </div>
-                    <pre>{
-  "success": false,
-  "error": "Invalid Instagram URL"
-}</pre>
+{
+  "success": true,
+  "data": {
+    "title": "Contoh Video YouTube",
+    "duration": "5:23",
+    "thumbnail": "https://i.ytimg.com/vi/.../default.jpg",
+    "downloadUrl": "https://api.branpedia.com/download/youtube/..."
+  }
+}
+                </div>
+                
+                <!-- Form Input URL untuk YouTube -->
+                <div class="test-form">
+                    <h4>Test Endpoint</h4>
+                    <div class="parameter__name required">url<span>&nbsp;*</span></div>
+                    <div class="input-group">
+                        <input type="text" id="testUrlYoutube" placeholder="https://www.youtube.com/watch?v=abc123" class="url-input">
+                        <button class="test-btn" onclick="testEndpoint('testUrlYoutube', 'testResultYoutube', '/api/youtube')">
+                            <i class="fas fa-bolt"></i> Test
+                        </button>
+                    </div>
+                    <div id="testResultYoutube" class="test-result"></div>
                 </div>
             </div>
             
-            <!-- Test Form untuk Instagram -->
-            <div class="test-form">
-                <h3>Test API Instagram</h3>
-                <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                <div class="input-group">
-                    <input type="text" id="testUrlInstagramDocs" placeholder="https://www.instagram.com/p/Cs6Y8-0uL7h/" class="url-input">
-                    <button class="test-btn" onclick="testEndpoint('testUrlInstagramDocs', 'testResultInstagramDocs', '/api/instagram')">
-                        <i class="fas fa-bolt"></i> Test Endpoint
-                    </button>
+            <h3>AI Services</h3>
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="endpoint-method">GET</span>
+                    <span class="endpoint-url">/api/ai/toanime</span>
+                    <button class="copy-btn" data-endpoint="/api/ai/toanime"><i class="fas fa-copy"></i> Copy Endpoint</button>
                 </div>
-                <div id="testResultInstagramDocs" class="test-result"></div>
-            </div>
-        </div>
-
-        <!-- API Endpoints Section -->
-        <div id="api" class="section">
-            <h2>API Endpoints <span id="api-counter" class="api-counter">Loading...</span></h2>
-            
-            <div id="api-list">
-                <div class="loading-state">
-                    <i class="fas fa-spinner fa-spin"></i> Memuat daftar API...
+                <div class="response">
+                    <div class="response-header">
+                        <span class="response-title">Response</span>
+                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
+                    </div>
+{
+  "success": true,
+  "data": {
+    "original": "base64_image",
+    "anime": "base64_image"
+  }
+}
+                </div>
+                
+                <!-- Form untuk AI Service -->
+                <div class="test-form">
+                    <h4>Test Endpoint</h4>
+                    <div class="parameter__name">image_url (optional)</div>
+                    <div class="input-group">
+                        <input type="text" id="testUrlAnime" placeholder="https://example.com/image.jpg" class="url-input">
+                        <button class="test-btn" onclick="testEndpoint('testUrlAnime', 'testResultAnime', '/api/ai/toanime')">
+                            <i class="fas fa-bolt"></i> Test
+                        </button>
+                    </div>
+                    <div id="testResultAnime" class="test-result"></div>
                 </div>
             </div>
         </div>
@@ -380,160 +402,16 @@
                         <span class="response-title">Kontak Info</span>
                         <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Info</button>
                     </div>
-                    <pre>{
+{
   "email": "support@branpedia.com",
   "website": "https://branpedia.com",
   "documentation": "https://docs.branpedia.com"
-}</pre>
+}
                 </div>
             </div>
         </div>
     </div>
 
-    <script>
-        // Basic functionality for the website
-        document.addEventListener('DOMContentLoaded', function() {
-            // Menu toggle functionality
-            const menuToggle = document.querySelector('.menu-toggle');
-            const sidebar = document.querySelector('.sidebar');
-            
-            if (menuToggle && sidebar) {
-                menuToggle.addEventListener('click', function() {
-                    sidebar.classList.toggle('active');
-                });
-            }
-            
-            // Theme toggle functionality
-            const themeToggle = document.getElementById('themeToggle');
-            
-            if (themeToggle) {
-                themeToggle.addEventListener('click', function() {
-                    document.body.classList.toggle('dark-theme');
-                    const icon = themeToggle.querySelector('i');
-                    
-                    if (document.body.classList.contains('dark-theme')) {
-                        icon.classList.remove('fa-moon');
-                        icon.classList.add('fa-sun');
-                    } else {
-                        icon.classList.remove('fa-sun');
-                        icon.classList.add('fa-moon');
-                    }
-                });
-            }
-            
-            // Navigation functionality
-            const navLinks = document.querySelectorAll('.sidebar-menu a');
-            
-            navLinks.forEach(link => {
-                link.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    
-                    const targetId = this.getAttribute('data-target');
-                    const targetSection = document.getElementById(targetId);
-                    
-                    if (targetSection) {
-                        // Hide all sections
-                        document.querySelectorAll('.section').forEach(section => {
-                            section.classList.remove('active');
-                        });
-                        
-                        // Show target section
-                        targetSection.classList.add('active');
-                        
-                        // Update active link
-                        navLinks.forEach(navLink => {
-                            navLink.classList.remove('active');
-                        });
-                        this.classList.add('active');
-                        
-                        // Close sidebar on mobile
-                        if (window.innerWidth < 768) {
-                            sidebar.classList.remove('active');
-                        }
-                    }
-                });
-            });
-            
-            // Copy button functionality
-            const copyButtons = document.querySelectorAll('.copy-btn');
-            
-            copyButtons.forEach(button => {
-                button.addEventListener('click', function() {
-                    const endpoint = this.getAttribute('data-endpoint');
-                    const fullUrl = window.location.origin + endpoint;
-                    
-                    navigator.clipboard.writeText(fullUrl).then(() => {
-                        // Show toast notification
-                        const toast = document.createElement('div');
-                        toast.textContent = 'Endpoint copied to clipboard!';
-                        toast.style.position = 'fixed';
-                        toast.style.bottom = '20px';
-                        toast.style.right = '20px';
-                        toast.style.backgroundColor = '#4361ee';
-                        toast.style.color = 'white';
-                        toast.style.padding = '10px 15px';
-                        toast.style.borderRadius = '5px';
-                        toast.style.zIndex = '1000';
-                        document.body.appendChild(toast);
-                        
-                        setTimeout(() => {
-                            document.body.removeChild(toast);
-                        }, 2000);
-                    });
-                });
-            });
-        });
-        
-        // Function to test endpoints
-        function testEndpoint(inputId, resultId, endpoint = '/api/mediafire') {
-            const urlInput = document.getElementById(inputId);
-            const resultDiv = document.getElementById(resultId);
-            
-            if (!urlInput.value) {
-                resultDiv.innerHTML = '<div class="error-message">Please enter a URL</div>';
-                resultDiv.className = 'test-result error';
-                return;
-            }
-            
-            resultDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing endpoint...';
-            resultDiv.className = 'test-result';
-            
-            // Simulate API call (replace with actual API call)
-            setTimeout(() => {
-                const randomSuccess = Math.random() > 0.3;
-                
-                if (randomSuccess) {
-                    resultDiv.innerHTML = `
-                        <div class="result-header">
-                            <span class="result-title">Success</span>
-                            <span class="status success"><i class="fas fa-check-circle"></i> 200 OK</span>
-                        </div>
-                        <pre>{
-  "success": true,
-  "data": {
-    "name": "Test File",
-    "size": "5.2MB",
-    "extension": "zip",
-    "uploaded": "2024-02-22 07:29:23",
-    "downloadUrl": "https://download.example.com/file.zip"
-  }
-}</pre>
-                        <a href="#" class="download-link">https://download.example.com/file.zip</a>
-                    `;
-                    resultDiv.className = 'test-result success';
-                } else {
-                    resultDiv.innerHTML = `
-                        <div class="result-header">
-                            <span class="result-title">Error</span>
-                            <span class="status error"><i class="fas fa-exclamation-circle"></i> 400 Bad Request</span>
-                        </div>
-                        <div class="error-message">Invalid URL provided</div>
-                        <div class="error-tips">Make sure the URL is valid and points to a MediaFire file</div>
-                    `;
-                    resultDiv.className = 'test-result error';
-                }
-            }, 1500);
-        }
-    </script>
+    <script src="js/script.js"></script>
 </body>
 </html>
