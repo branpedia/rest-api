@@ -4,91 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Branpedia REST API | Unlimited</title>
-    <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
 </head>
 <body>
-    <div class="particles" id="particles"></div>
-    
-    <button class="menu-toggle">
-        <i class="fas fa-bars"></i>
-    </button>
-
-    <div class="header">
-        <h1><i class="fas fa-code"></i> Branpedia REST API</h1>
-        <div class="header-actions">
-            <button class="theme-toggle" id="themeToggle">
-                <i class="fas fa-moon"></i>
-            </button>
-        </div>
-    </div>
-
-    <div class="sidebar">
-        <div class="sidebar-header">
-            <h3>Branpedia API</h3>
-            <p>Free REST API for Developers</p>
-        </div>
-        <div class="sidebar-menu">
-            <ul>
-                <li><a href="#" class="active" data-target="home"><i class="fas fa-home"></i> <span class="menu-text">Home</span></a></li>
-                <li><a href="#" data-target="dashboard"><i class="fas fa-chart-bar"></i> <span class="menu-text">Dashboard</span></a></li>
-                <li><a href="#" data-target="docs"><i class="fas fa-book"></i> <span class="menu-text">Dokumentasi</span></a></li>
-                <li><a href="#" data-target="api"><i class="fas fa-code"></i> <span class="menu-text">API Endpoints</span></a></li>
-                <li><a href="#" data-target="about"><i class="fas fa-info-circle"></i> <span class="menu-text">Tentang</span></a></li>
-            </ul>
-        </div>
-    </div>
-
-    <div class="main-content">
-        <!-- Home Section -->
-        <div id="home" class="section active">
-            <div class="hero">
-                <h1>Branpedia REST API</h1>
-                <p>Kumpulan API gratis untuk pengembang. Akses berbagai layanan dengan mudah melalui endpoint API kami tanpa batas.</p>
-                <div class="hero-buttons">
-                    <a href="#" class="btn btn-primary" data-target="docs"><i class="fas fa-book"></i> Lihat Dokumentasi</a>
-                    <a href="#" class="btn btn-outline" data-target="api"><i class="fas fa-code"></i> Explor API</a>
-                </div>
+    <div class="container">
+        <header>
+            <h1>Branpedia REST API</h1>
+            <p>API untuk mengunduh konten dari berbagai platform dengan mudah dan cepat</p>
+        </header>
+        
+        <div class="api-section">
+            <div class="api-title">
+                <i class="fas fa-download"></i>
+                <h2>MediaFire Downloader</h2>
             </div>
-            
-            <h2>Fitur Unggulan</h2>
-            <div class="stats-cards">
-                <div class="stat-card">
-                    <h3>MediaFire Downloader</h3>
-                    <div class="number">API</div>
-                    <p>Ekstrak link download dari MediaFire</p>
-                </div>
-                <div class="stat-card">
-                    <h3>YouTube Downloader</h3>
-                    <div class="number">API</div>
-                    <p>Download video YouTube dengan mudah</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Instagram Downloader</h3>
-                    <div class="number">API</div>
-                    <p>Download konten Instagram</p>
-                </div>
-                <div class="stat-card">
-                    <h3>TikTok Downloader</h3>
-                    <div class="number">API</div>
-                    <p>Download video TikTok tanpa watermark</p>
-                </div>
-            </div>
-            
-            <h2>Contoh Penggunaan</h2>
             <div class="endpoint">
-                <div class="endpoint-header">
-                    <span class="endpoint-method">GET</span>
-                    <span class="endpoint-url">/api/mediafire?url=https://www.mediafire.com/...</span>
-                    <button class="copy-btn" data-endpoint="/api/mediafire?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
-                </div>
-                <div class="response">
-                    <div class="response-header">
-                        <span class="response-title">Response</span>
-                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
-                    </div>
+                GET https://your-vercel-app.vercel.app/api/mediafire?url=URL_MEDIAFIRE
+                <button class="copy-btn">Salin</button>
+            </div>
+            <div class="response">
 {
   "success": true,
   "data": {
@@ -99,211 +35,20 @@
     "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
   }
 }
-                </div>
-                
-                <!-- Form Input URL -->
-                <div class="test-form">
-                    <h4>Test Endpoint</h4>
-                    <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                    <div class="input-group">
-                        <input type="text" id="testUrlHome" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlHome', 'testResultHome')">
-                            <i class="fas fa-bolt"></i> Test
-                        </button>
-                    </div>
-                    <div id="testResultHome" class="test-result"></div>
-                </div>
+                <button class="copy-btn">Salin</button>
             </div>
         </div>
-
-        <!-- Dashboard Section -->
-        <div id="dashboard" class="section">
-            <h2>Dashboard</h2>
-            
-            <div class="stats-cards">
-                <div class="stat-card">
-                    <h3>Total API Calls</h3>
-                    <div class="number">12,459</div>
-                    <p>+12% dari bulan lalu</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Active Endpoints</h3>
-                    <div class="number">24</div>
-                    <p>8 endpoints baru</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Success Rate</h3>
-                    <div class="number">98.7%</div>
-                    <p>2% peningkatan</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Average Response Time</h3>
-                    <div class="number">127ms</div>
-                    <p>23ms lebih cepat</p>
-                </div>
+        
+        <div class="api-section">
+            <div class="api-title">
+                <i class="fab fa-instagram"></i>
+                <h2>Instagram Downloader</h2>
             </div>
-            
-            <h2>API Usage Statistics</h2>
             <div class="endpoint">
-                <div class="endpoint-header">
-                    <span class="endpoint-method">GET</span>
-                    <span class="endpoint-url">/api/mediafire?url=</span>
-                    <button class="copy-btn" data-endpoint="/api/mediafire?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
-                </div>
-                <div class="response">
-                    <div class="response-header">
-                        <span class="response-title">Response</span>
-                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
-                    </div>
-{
-  "success": true,
-  "data": {
-    "name": "Terakomari - MD.zip",
-    "size": "6.78MB",
-    "extension": "zip",
-    "uploaded": "2024-02-22 07:29:23",
-    "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
-  }
-}
-                </div>
-                
-                <!-- Form Input URL -->
-                <div class="test-form">
-                    <h4>Test Endpoint</h4>
-                    <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                    <div class="input-group">
-                        <input type="text" id="testUrlDashboard" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlDashboard', 'testResultDashboard')">
-                            <i class="fas fa-bolt"></i> Test
-                        </button>
-                    </div>
-                    <div id="testResultDashboard" class="test-result"></div>
-                </div>
+                GET https://your-vercel-app.vercel.app/api/instagram?url=URL_INSTAGRAM
+                <button class="copy-btn">Salin</button>
             </div>
-        </div>
-
-        <!-- Documentation Section -->
-        <div id="docs" class="section">
-            <h2>Dokumentasi API MediaFire Downloader</h2>
-            
-            <h3>Pengenalan</h3>
-            <p>API MediaFire Downloader memungkinkan Anda untuk mengekstrak link download langsung dari MediaFire. API ini berguna untuk mengintegrasikan fungsi download MediaFire ke dalam aplikasi Anda.</p>
-            
-            <h3>Authentication</h3>
-            <p>Untuk saat ini, API ini tidak memerlukan authentication. Namun, untuk penggunaan komersial atau volume tinggi, API key mungkin diperlukan di masa depan.</p>
-            
-            <h3>Endpoint</h3>
-            <div class="endpoint">
-                <div class="endpoint-header">
-                    <span class="endpoint-method">GET</span>
-                    <span class="endpoint-url">/api/mediafire?url={mediafire_url}</span>
-                    <button class="copy-btn" data-endpoint="/api/mediafire?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
-                </div>
-            </div>
-            
-            <h3>Parameter</h3>
-            <p>Parameter yang diperlukan:</p>
-            <ul>
-                <li><strong>url</strong> (string) - URL MediaFire yang ingin diambil informasi downloadnya</li>
-            </ul>
-            
-            <h3>Contoh Penggunaan</h3>
-            <p>Contoh penggunaan dengan curl:</p>
-            <div class="code-block">
-curl -X 'GET' \
-  'https://your-vercel-app.vercel.app/api/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fvj3al1c98u2zdr6%2FTerakomari_-_MD.zip%2Ffile' \
-  -H 'accept: application/json'
-            </div>
-            
-            <h3>Response</h3>
-            <p>Response JSON akan berisi:</p>
-            <div class="endpoint">
-                <div class="response">
-                    <div class="response-header">
-                        <span class="response-title">Response</span>
-                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
-                    </div>
-{
-  "success": true,
-  "data": {
-    "name": "Terakomari - MD.zip",
-    "size": "6.78MB",
-    "extension": "zip",
-    "uploaded": "2024-02-22 07:29:23",
-    "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
-  }
-}
-                </div>
-            </div>
-            
-            <h3>Error Handling</h3>
-            <p>Jika terjadi error, response akan mengembalikan success false dan pesan error:</p>
-            <div class="endpoint">
-                <div class="response">
-                    <div class="response-header">
-                        <span class="response-title">Error Response</span>
-                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
-                    </div>
-{
-  "success": false,
-  "error": "Invalid MediaFire URL"
-}
-                </div>
-            </div>
-            
-            <!-- Test Form untuk Dokumentasi -->
-            <div class="test-form">
-                <h3>Test API MediaFire</h3>
-                <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                <div class="input-group">
-                    <input type="text" id="testUrlDocs" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                    <button class="test-btn" onclick="testEndpoint('testUrlDocs', 'testResultDocs')">
-                        <i class="fas fa-bolt"></i> Test Endpoint
-                    </button>
-                </div>
-                <div id="testResultDocs" class="test-result"></div>
-            </div>
-            
-            <!-- Dokumentasi Instagram Downloader -->
-            <h2>Dokumentasi API Instagram Downloader</h2>
-            
-            <h3>Pengenalan</h3>
-            <p>API Instagram Downloader memungkinkan Anda untuk mengunduh konten dari Instagram seperti foto, video, dan IGTV. API ini berguna untuk mengintegrasikan fungsi download Instagram ke dalam aplikasi Anda.</p>
-            
-            <h3>Authentication</h3>
-            <p>Untuk saat ini, API ini tidak memerlukan authentication. Namun, untuk penggunaan komersial atau volume tinggi, API key mungkin diperlukan di masa depan.</p>
-            
-            <h3>Endpoint</h3>
-            <div class="endpoint">
-                <div class="endpoint-header">
-                    <span class="endpoint-method">GET</span>
-                    <span class="endpoint-url">/api/instagram?url={instagram_url}</span>
-                    <button class="copy-btn" data-endpoint="/api/instagram?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
-                </div>
-            </div>
-            
-            <h3>Parameter</h3>
-            <p>Parameter yang diperlukan:</p>
-            <ul>
-                <li><strong>url</strong> (string) - URL Instagram yang ingin diambil kontennya</li>
-            </ul>
-            
-            <h3>Contoh Penggunaan</h3>
-            <p>Contoh penggunaan dengan curl:</p>
-            <div class="code-block">
-curl -X 'GET' \
-  'https://your-vercel-app.vercel.app/api/instagram?url=https%3A%2F%2Fwww.instagram.com%2Fp%2FCs6Y8-0uL7h%2F' \
-  -H 'accept: application/json'
-            </div>
-            
-            <h3>Response</h3>
-            <p>Response JSON akan berisi:</p>
-            <div class="endpoint">
-                <div class="response">
-                    <div class="response-header">
-                        <span class="response-title">Response</span>
-                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
-                    </div>
+            <div class="response">
 {
   "success": true,
   "data": {
@@ -315,91 +60,20 @@ curl -X 'GET' \
     "size": "3.2MB"
   }
 }
-                </div>
-            </div>
-            
-            <h3>Error Handling</h3>
-            <p>Jika terjadi error, response akan mengembalikan success false dan pesan error:</p>
-            <div class="endpoint">
-                <div class="response">
-                    <div class="response-header">
-                        <span class="response-title">Error Response</span>
-                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
-                    </div>
-{
-  "success": false,
-  "error": "Invalid Instagram URL"
-}
-                </div>
-            </div>
-            
-            <!-- Test Form untuk Instagram -->
-            <div class="test-form">
-                <h3>Test API Instagram</h3>
-                <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                <div class="input-group">
-                    <input type="text" id="testUrlInstagramDocs" placeholder="https://www.instagram.com/p/Cs6Y8-0uL7h/" class="url-input">
-                    <button class="test-btn" onclick="testEndpoint('testUrlInstagramDocs', 'testResultInstagramDocs', '/api/instagram')">
-                        <i class="fas fa-bolt"></i> Test Endpoint
-                    </button>
-                </div>
-                <div id="testResultInstagramDocs" class="test-result"></div>
+                <button class="copy-btn">Salin</button>
             </div>
         </div>
-
-        <!-- API Endpoints Section -->
-        <div id="api" class="section">
-            <h2>API Endpoints</h2>
-            
-            <h3>Downloader</h3>
-            <div class="endpoint">
-                <div class="endpoint-header">
-                    <span class="endpoint-method">GET</span>
-                    <span class="endpoint-url">/api/mediafire?url={mediafire_url}</span>
-                    <button class="copy-btn" data-endpoint="/api/mediafire?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
-                </div>
-                <div class="response">
-                    <div class="response-header">
-                        <span class="response-title">Response</span>
-                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
-                    </div>
-{
-  "success": true,
-  "data": {
-    "name": "Terakomari - MD.zip",
-    "size": "6.78MB",
-    "extension": "zip",
-    "uploaded": "2024-02-22 07:29:23",
-    "downloadUrl": "https://download2264.mediafire.com/.../Terakomari+-+MD.zip"
-  }
-}
-                </div>
-                
-                <!-- Form Input URL -->
-                <div class="test-form">
-                    <h4>Test Endpoint</h4>
-                    <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                    <div class="input-group">
-                        <input type="text" id="testUrlMediafire" placeholder="https://www.mediafire.com/file/vj3al1c98u2zdr6/Terakomari_-_MD.zip/file" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlMediafire', 'testResultMediafire')">
-                            <i class="fas fa-bolt"></i> Test
-                        </button>
-                    </div>
-                    <div id="testResultMediafire" class="test-result"></div>
-                </div>
+        
+        <div class="api-section">
+            <div class="api-title">
+                <i class="fab fa-youtube"></i>
+                <h2>YouTube Downloader</h2>
             </div>
-            
             <div class="endpoint">
-                <div class="endpoint-header">
-                    <span class="endpoint-method">GET</span>
-                    <span class="endpoint-url">/api/youtube?url={youtube_url}</span>
-                    <button class="copy-btn" data-endpoint="/api/youtube?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
-                </div>
-                <div class="response">
-                    <div class="response-header">
-                        <span class="response-title">Response</span>
-                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
-                    </div>
+                GET https://your-vercel-app.vercel.app/api/youtube?url=URL_YOUTUBE
+                <button class="copy-btn">Salin</button>
+            </div>
+            <div class="response">
 {
   "success": true,
   "data": {
@@ -409,72 +83,20 @@ curl -X 'GET' \
     "downloadUrl": "https://api.branpedia.com/download/youtube/..."
   }
 }
-                </div>
-                
-                <!-- Form Input URL untuk YouTube -->
-                <div class="test-form">
-                    <h4>Test Endpoint</h4>
-                    <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                    <div class="input-group">
-                        <input type="text" id="testUrlYoutube" placeholder="https://www.youtube.com/watch?v=abc123" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlYoutube', 'testResultYoutube', '/api/youtube')">
-                            <i class="fas fa-bolt"></i> Test
-                        </button>
-                    </div>
-                    <div id="testResultYoutube" class="test-result"></div>
-                </div>
+                <button class="copy-btn">Salin</button>
             </div>
-            
-            <div class="endpoint">
-                <div class="endpoint-header">
-                    <span class="endpoint-method">GET</span>
-                    <span class="endpoint-url">/api/instagram?url={instagram_url}</span>
-                    <button class="copy-btn" data-endpoint="/api/instagram?url="><i class="fas fa-copy"></i> Copy Endpoint</button>
-                </div>
-                <div class="response">
-                    <div class="response-header">
-                        <span class="response-title">Response</span>
-                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
-                    </div>
-{
-  "success": true,
-  "data": {
-    "type": "video",
-    "caption": "Caption dari postingan Instagram",
-    "downloadUrl": "https://api.branpedia.com/download/instagram/...",
-    "thumbnail": "https://api.branpedia.com/thumbnail/instagram/...",
-    "duration": "0:15",
-    "size": "3.2MB"
-  }
-}
-                </div>
-                
-                <!-- Form Input URL untuk Instagram -->
-                <div class="test-form">
-                    <h4>Test Endpoint</h4>
-                    <div class="parameter__name required">url<span>&nbsp;*</span></div>
-                    <div class="input-group">
-                        <input type="text" id="testUrlInstagram" placeholder="https://www.instagram.com/p/Cs6Y8-0uL7h/" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlInstagram', 'testResultInstagram', '/api/instagram')">
-                            <i class="fas fa-bolt"></i> Test
-                        </button>
-                    </div>
-                    <div id="testResultInstagram" class="test-result"></div>
-                </div>
+        </div>
+        
+        <div class="api-section">
+            <div class="api-title">
+                <i class="fas fa-image"></i>
+                <h2>Anime Image Recognition</h2>
             </div>
-            
-            <h3>AI Services</h3>
             <div class="endpoint">
-                <div class="endpoint-header">
-                    <span class="endpoint-method">GET</span>
-                    <span class="endpoint-url">/api/ai/toanime</span>
-                    <button class="copy-btn" data-endpoint="/api/ai/toanime"><i class="fas fa-copy"></i> Copy Endpoint</button>
-                </div>
-                <div class="response">
-                    <div class="response-header">
-                        <span class="response-title">Response</span>
-                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Result</button>
-                    </div>
+                POST https://your-vercel-app.vercel.app/api/anime-recognition
+                <button class="copy-btn">Salin</button>
+            </div>
+            <div class="response">
 {
   "success": true,
   "data": {
@@ -482,57 +104,39 @@ curl -X 'GET' \
     "anime": "base64_image"
   }
 }
-                </div>
-                
-                <!-- Form untuk AI Service -->
-                <div class="test-form">
-                    <h4>Test Endpoint</h4>
-                    <div class="parameter__name">image_url (optional)</div>
-                    <div class="input-group">
-                        <input type="text" id="testUrlAnime" placeholder="https://example.com/image.jpg" class="url-input">
-                        <button class="test-btn" onclick="testEndpoint('testUrlAnime', 'testResultAnime', '/api/ai/toanime')">
-                            <i class="fas fa-bolt"></i> Test
-                        </button>
-                    </div>
-                    <div id="testResultAnime" class="test-result"></div>
-                </div>
+                <button class="copy-btn">Salin</button>
             </div>
         </div>
-
-        <!-- About Section -->
-        <div id="about" class="section">
-            <h2>Tentang Branpedia API</h2>
-            
-            <p>Branpedia API adalah kumpulan layanan API gratis yang dikembangkan untuk memudahkan pengembang dalam mengintegrasikan berbagai fungsi ke dalam aplikasi mereka.</p>
-            
-            <h3>Fitur</h3>
-            <ul>
-                <li>API Downloader (MediaFire, YouTube, Instagram, TikTok)</li>
-                <li>Layanan AI (Image to Anime, ChatGPT, dll)</li>
-                <li>Tools (URL Shortener, Image Processing, dll)</li>
-                <li>Tanpa batas penggunaan</li>
-                <li>Response cepat dan reliable</li>
-            </ul>
-            
-            <h3>Kontak</h3>
-            <p>Untuk pertanyaan dan dukungan, silakan hubungi kami di:</p>
-            <div class="endpoint">
-                <div class="response">
-                    <div class="response-header">
-                        <span class="response-title">Kontak Info</span>
-                        <button class="copy-result-btn"><i class="fas fa-copy"></i> Copy Info</button>
-                    </div>
-{
-  "email": "support@branpedia.com",
-  "website": "https://branpedia.com",
-  "documentation": "https://docs.branpedia.com"
-}
-                </div>
-            </div>
+        
+        <div class="contact">
+            <p><strong>Email:</strong> support@branpedia.com</p>
+            <p><strong>Website:</strong> <a href="https://branpedia.com" target="_blank">https://branpedia.com</a></p>
+            <p><strong>Documentation:</strong> <a href="https://docs.branpedia.com" target="_blank">https://docs.branpedia.com</a></p>
         </div>
     </div>
 
-    <script src="js/script.js"></script>
-    <script src="js/api-loader.js"></script>
+    <script>
+        // Fungsi untuk menyalin teks ke clipboard
+        function copyToClipboard(element) {
+            const text = element.previousSibling.textContent.trim();
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = element;
+                const originalText = btn.textContent;
+                btn.textContent = "Tersalin!";
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                }, 2000);
+            }).catch(err => {
+                console.error('Gagal menyalin teks: ', err);
+            });
+        }
+
+        // Menambahkan event listener ke semua tombol salin
+        document.querySelectorAll('.copy-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                copyToClipboard(this);
+            });
+        });
+    </script>
 </body>
 </html>
