@@ -41,12 +41,15 @@ export default async function handler(req, res) {
   if (!url) {
     return res.status(400).json({
       success: false,
-      error: "Masukkan link YouTube! Contoh: /api/yttranscript?url=https://youtube.com/shorts/lqz9d_zeU6E",
+      error:
+        "Parameter url is required. Example: /api/yttranscript?url=https://youtube.com/watch?v=XXXX",
     });
   }
 
   // Extract YouTube video ID
-  const idMatch = url.match(/(?:v=|\/shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  const idMatch = url.match(
+    /(?:v=|\/shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+  );
   if (!idMatch) {
     return res.status(400).json({
       success: false,
@@ -61,8 +64,9 @@ export default async function handler(req, res) {
   try {
     const response = await fetch(transcriptUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-      }
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:119.0) Gecko/20100101 Firefox/119.0",
+      },
     });
 
     if (!response.ok) {
@@ -72,25 +76,25 @@ export default async function handler(req, res) {
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    let transcriptText = [];
-    
-    // Parse HTML dengan selector yang benar
-    $("#transcript span.transcript-segment").each((i, el) => {
-      let text = $(el).text().trim();
-      if (text) transcriptText.push(text);
+    let transcript = [];
+
+    $(".transcript-text .transcript-row").each((i, el) => {
+      let start = $(el).find(".start").text().trim();
+      let text = $(el).find(".text").text().trim();
+      if (text) {
+        transcript.push({ start, text });
+      }
     });
 
-    if (transcriptText.length === 0) {
-      throw new Error("Transcript tidak ditemukan!");
+    if (transcript.length === 0) {
+      throw new Error("Transcript tidak ditemukan atau video tidak mendukung.");
     }
-
-    let result = transcriptText.join(" ");
 
     return res.status(200).json({
       success: true,
       videoId,
-      transcript: result,
-      totalSegments: transcriptText.length
+      transcript,
+      total: transcript.length,
     });
   } catch (error) {
     console.error("Error fetching transcript:", error.message);
