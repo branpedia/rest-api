@@ -35,9 +35,6 @@ export default async function handler(request, response) {
       return response.status(400).json({ success: false, error: 'URL tidak valid. Pastikan URL berasal dari Videy.co dan mengandung parameter id.' });
     }
 
-    let html;
-    let browser;
-
     // Extract video ID from URL
     const videoIdMatch = url.match(/[?&]id=([^&]+)/i);
     if (!videoIdMatch) {
@@ -47,114 +44,140 @@ export default async function handler(request, response) {
     const videoId = videoIdMatch[1];
     const directVideoUrl = `https://cdn.videy.co/${videoId}.mp4`;
 
+    let fileSize = null;
+    let contentType = null;
+    let browser;
+
     try {
-      // First try with cloudscraper to check if video exists
+      // First try with cloudscraper to get video headers
       const headResponse = await cloudscraper.head(directVideoUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
+        },
+        timeout: 10000
       });
 
-      const fileSize = headResponse.request.headers['content-length'];
-      const contentType = headResponse.request.headers['content-type'];
-
-      if (!contentType.includes('video')) {
-        throw new Error('URL tidak mengarah ke video yang valid');
-      }
-
-      // Format file size
-      const formatSize = (bytes) => {
-        if (!bytes) return '0 KB';
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(1024));
-        return `${parseFloat((bytes / Math.pow(1024, i)).toFixed(2))} ${sizes[i]}`;
-      };
-
-      return response.status(200).json({
-        success: true,
-        data: {
-          name: `${videoId}.mp4`,
-          size: formatSize(fileSize),
-          extension: 'mp4',
-          uploaded: 'Unknown', // Videy tidak menyediakan info upload time
-          downloadUrl: directVideoUrl,
-          videoId: videoId,
-          details: {
-            platform: 'Videy.co',
-            quality: 'Original',
-            contentLength: fileSize,
-            contentType: contentType
-          }
-        }
-      });
+      // Get headers from cloudscraper response
+      fileSize = headResponse.request.headers['content-length'];
+      contentType = headResponse.request.headers['content-type'];
 
     } catch (error) {
-      console.log('Direct video check failed, trying to scrape Videy page...');
-
-      // If direct check fails, try to scrape the Videy page
+      console.log('Cloudscraper HEAD failed, trying with axios...');
+      
+      // Fallback to axios for HEAD request
       try {
-        // First try with cloudscraper
-        html = await cloudscraper.get(url, {
+        const axios = await import('axios');
+        const headRes = await axios.default.head(directVideoUrl, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-          }
-        });
-      } catch (cloudError) {
-        console.log('Cloudscraper failed, trying with Puppeteer...');
-        
-        // If cloudscraper fails, use Puppeteer as fallback
-        browser = await puppeteer.launch({
-          headless: true,
-          args: ['--no-sandbox', '--disable-setuid-sandbox']
+          },
+          timeout: 10000
         });
         
-        const page = await browser.newPage();
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-        await page.goto(url, { waitUntil: 'networkidle2' });
+        fileSize = headRes.headers['content-length'];
+        contentType = headRes.headers['content-type'];
         
-        html = await page.content();
-        await browser.close();
-      }
-
-      // Parse HTML to extract information
-      const dom = new JSDOM(html);
-      const document = dom.window.document;
-
-      // Try to find video information from the page
-      const titleElement = document.querySelector('title');
-      const pageTitle = titleElement ? titleElement.textContent.trim() : `Videy_${videoId}`;
-
-      // Look for video elements or metadata
-      const videoElements = document.querySelectorAll('video');
-      let videoSource = '';
-
-      if (videoElements.length > 0) {
-        const sourceElement = videoElements[0].querySelector('source');
-        if (sourceElement) {
-          videoSource = sourceElement.getAttribute('src');
+      } catch (axiosError) {
+        console.log('Axios HEAD also failed, trying Puppeteer...');
+        
+        // Final fallback: use Puppeteer to get video info
+        try {
+          browser = await puppeteer.launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+          });
+          
+          const page = await browser.newPage();
+          await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+          
+          // Use abort() for non-essential requests to speed up loading
+          await page.setRequestInterception(true);
+          page.on('request', request => {
+            if (request.resourceType() !== 'document') {
+              request.abort();
+            } else {
+              request.continue();
+            }
+          });
+          
+          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+          
+          // Try to get page title for filename
+          const pageTitle = await page.title();
+          const cleanTitle = pageTitle.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim() || `Videy_${videoId}`;
+          
+          await browser.close();
+          
+          return response.status(200).json({
+            success: true,
+            data: {
+              name: `${cleanTitle}.mp4`,
+              size: 'Unknown',
+              extension: 'mp4',
+              uploaded: 'Unknown',
+              downloadUrl: directVideoUrl,
+              videoId: videoId,
+              details: {
+                platform: 'Videy.co',
+                quality: 'Original',
+                note: 'Ukuran file tidak dapat ditentukan'
+              }
+            }
+          });
+          
+        } catch (puppeteerError) {
+          console.error('Puppeteer failed:', puppeteerError);
+          // Continue to return basic info even if all methods fail
         }
       }
-
-      // If no video source found in page, use the direct CDN URL
-      const finalDownloadUrl = videoSource || directVideoUrl;
-
-      return response.status(200).json({
-        success: true,
-        data: {
-          name: `${pageTitle.replace(/[^a-zA-Z0-9]/g, '_')}.mp4`,
-          size: 'Unknown', // Size tidak bisa didapatkan dari halaman
-          extension: 'mp4',
-          uploaded: 'Unknown',
-          downloadUrl: finalDownloadUrl,
-          videoId: videoId,
-          details: {
-            platform: 'Videy.co',
-            quality: 'Original',
-            note: videoSource ? 'Video source ditemukan di halaman' : 'Menggunakan CDN langsung'
-          }
-        }
-      });
     }
+
+    // Format file size
+    const formatSize = (bytes) => {
+      if (!bytes) return 'Unknown';
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(1024));
+      return `${parseFloat((bytes / Math.pow(1024, i)).toFixed(2))} ${sizes[i]}`;
+    };
+
+    // Get clean filename from URL or use videoId
+    let fileName = `Videy_${videoId}.mp4`;
+    try {
+      // Try to get page title for better filename
+      const pageResponse = await cloudscraper.get(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        timeout: 5000
+      });
+      
+      const dom = new JSDOM(pageResponse);
+      const document = dom.window.document;
+      const pageTitle = document.querySelector('title');
+      if (pageTitle) {
+        fileName = `${pageTitle.textContent.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim()}.mp4`;
+      }
+    } catch (titleError) {
+      console.log('Failed to get page title, using default filename');
+    }
+
+    return response.status(200).json({
+      success: true,
+      data: {
+        name: fileName,
+        size: formatSize(fileSize),
+        extension: 'mp4',
+        uploaded: 'Unknown',
+        downloadUrl: directVideoUrl,
+        videoId: videoId,
+        details: {
+          platform: 'Videy.co',
+          quality: 'Original',
+          contentType: contentType || 'video/mp4',
+          fileSizeBytes: fileSize || 'Unknown'
+        }
+      }
+    });
 
   } catch (error) {
     console.error('Error fetching Videy data:', error);
