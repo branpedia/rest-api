@@ -1,12 +1,16 @@
-import axios from "axios";
-
 async function getToken(url) {
   try {
-    const response = await axios.get(url);
-    const cookies = response.headers["set-cookie"];
-    const joinedCookies = cookies ? cookies.join("; ") : null;
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
+    
+    const cookies = response.headers.get('set-cookie');
+    const joinedCookies = cookies || null;
 
-    const csrfTokenMatch = response.data.match(/<meta name="csrf-token" content="(.*?)">/);
+    const html = await response.text();
+    const csrfTokenMatch = html.match(/<meta name="csrf-token" content="(.*?)">/);
     const csrfToken = csrfTokenMatch ? csrfTokenMatch[1] : null;
 
     if (!csrfToken || !joinedCookies) {
@@ -29,23 +33,25 @@ async function mlStalk(userId, zoneId) {
       zone: zoneId,
     };
 
-    const { data } = await axios.post(
-      "https://www.gempaytopup.com/stalk-ml",
-      payload,
-      {
-        headers: {
-          "X-CSRF-Token": csrfToken,
-          "Content-Type": "application/json",
-          Cookie: joinedCookies,
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        },
-      }
-    );
+    const response = await fetch("https://www.gempaytopup.com/stalk-ml", {
+      method: "POST",
+      headers: {
+        "X-CSRF-Token": csrfToken,
+        "Content-Type": "application/json",
+        "Cookie": joinedCookies,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+      },
+      body: JSON.stringify(payload)
+    });
 
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
     return data;
   } catch (error) {
     console.error("❌ Error:", error.message);
-    console.error("Response:", error.response?.data || "No response data");
     throw error;
   }
 }
