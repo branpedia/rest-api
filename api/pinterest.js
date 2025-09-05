@@ -2,6 +2,79 @@ import cloudscraper from 'cloudscraper';
 import { JSDOM } from 'jsdom';
 import puppeteer from 'puppeteer';
 
+// Function to resolve Pinterest short URLs dengan cloudscraper
+const resolvePinterestUrl = async (url) => {
+  try {
+    // Gunakan cloudscraper untuk mendapatkan URL akhir
+    const response = await cloudscraper.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      followRedirect: true,
+      followAllRedirects: true
+    });
+    
+    // Karena cloudscraper mengikuti redirect otomatis, kita perlu cara lain
+    // untuk mendapatkan URL akhir. Kita akan gunakan approach yang berbeda.
+    
+    // Coba dengan method head untuk mendapatkan redirect
+    try {
+      const headResponse = await cloudscraper.head(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        followRedirect: false
+      });
+      
+      if (headResponse && headResponse.request && headResponse.request.uri && headResponse.request.uri.href) {
+        return headResponse.request.uri.href;
+      }
+    } catch (headError) {
+      console.log('HEAD request failed, trying alternative method');
+    }
+    
+    // Fallback: gunakan puppeteer untuk resolve URL
+    let browser;
+    try {
+      browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      });
+      
+      const page = await browser.newPage();
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+      
+      // Gunakan request interception untuk capture redirect
+      let finalUrl = url;
+      await page.setRequestInterception(true);
+      
+      page.on('request', (request) => {
+        if (request.isNavigationRequest()) {
+          finalUrl = request.url();
+        }
+        request.continue();
+      });
+      
+      await page.goto(url, { 
+        waitUntil: 'domcontentloaded',
+        timeout: 15000 
+      });
+      
+      await browser.close();
+      return finalUrl;
+      
+    } catch (puppeteerError) {
+      if (browser) await browser.close();
+      console.error('Puppeteer URL resolution failed:', puppeteerError);
+      return url; // Return original URL sebagai fallback
+    }
+    
+  } catch (e) {
+    console.error('Resolve URL Error:', e);
+    return url;
+  }
+};
+
 export default async function handler(request, response) {
   // Set CORS headers
   response.setHeader('Access-Control-Allow-Credentials', true);
@@ -38,55 +111,17 @@ export default async function handler(request, response) {
     let finalUrl = url;
     let browser;
 
-    // Function to resolve short URLs
-    const resolveShortUrl = async (url) => {
-      try {
-        const response = await cloudscraper.get(url, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-          }
-        });
-        return response;
-      } catch (error) {
-        console.log('Cloudscraper failed for URL resolution, trying with Puppeteer...');
-        
-        browser = await puppeteer.launch({
-          headless: true,
-          args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
-        
-        const page = await browser.newPage();
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-        
-        // Enable request interception to capture redirects
-        await page.setRequestInterception(true);
-        let resolvedUrl = url;
-        
-        page.on('request', request => {
-          if (request.isNavigationRequest() && request.redirectChain().length > 0) {
-            resolvedUrl = request.url();
-          }
-          request.continue();
-        });
-        
-        await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-        await browser.close();
-        
-        return resolvedUrl;
-      }
-    };
-
-    // Resolve short URLs first
+    // Resolve short URLs first (hanya untuk pin.it)
     if (url.includes('pin.it')) {
       try {
-        finalUrl = await resolveShortUrl(url);
+        finalUrl = await resolvePinterestUrl(url);
+        console.log('Resolved URL:', finalUrl);
       } catch (error) {
         console.log('URL resolution failed, using original URL');
       }
     }
 
     let html;
-    let mediaData = {};
 
     try {
       // First try with cloudscraper to get savepin page
@@ -94,7 +129,8 @@ export default async function handler(request, response) {
       html = await cloudscraper.get(savepinUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
+        },
+        timeout: 15000
       });
     } catch (error) {
       console.log('Cloudscraper failed, trying with Puppeteer...');
@@ -109,7 +145,10 @@ export default async function handler(request, response) {
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
       
       const savepinUrl = `https://www.savepin.app/download.php?url=${encodeURIComponent(finalUrl)}&lang=en&type=redirect`;
-      await page.goto(savepinUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+      await page.goto(savepinUrl, { 
+        waitUntil: 'domcontentloaded',
+        timeout: 30000 
+      });
       
       html = await page.content();
       await browser.close();
@@ -149,13 +188,21 @@ export default async function handler(request, response) {
           video: videoUrl,
           image: imageUrl
         },
-        type: videoUrl ? 'video' : 'image',
-        downloadUrl: videoUrl || imageUrl
+        type: videoUrl ? 'video' : 'image'
       }
     });
 
   } catch (error) {
     console.error('Error fetching Pinterest data:', error);
+    
+    // Clean up browser if it's still open
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (e) {
+        console.error('Error closing browser:', e);
+      }
+    }
     
     // Retry logic
     if (retry < 2) {
