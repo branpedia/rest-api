@@ -2,78 +2,6 @@ import cloudscraper from 'cloudscraper';
 import { JSDOM } from 'jsdom';
 import puppeteer from 'puppeteer';
 
-// Function to resolve Pinterest short URLs dengan puppeteer
-const resolvePinterestUrl = async (url) => {
-  let browser;
-  try {
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-    
-    const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-    
-    // Gunakan request interception untuk capture redirect
-    let finalUrl = url;
-    await page.setRequestInterception(true);
-    
-    page.on('request', (request) => {
-      // Capture URL akhir dari request
-      finalUrl = request.url();
-      request.continue();
-    });
-    
-    // Gunakan goto dengan waitUntil 'domcontentloaded' untuk lebih cepat
-    await page.goto(url, { 
-      waitUntil: 'domcontentloaded',
-      timeout: 15000 
-    });
-    
-    await browser.close();
-    
-    // Pastikan URL resolved adalah URL Pinterest yang valid
-    if (finalUrl.includes('pinterest.com/pin/')) {
-      return finalUrl;
-    } else {
-      // Jika tidak mendapatkan URL yang benar, coba method alternatif
-      return await alternativeResolveMethod(url);
-    }
-    
-  } catch (error) {
-    if (browser) await browser.close();
-    console.error('URL resolution failed:', error);
-    return url; // Return original URL sebagai fallback
-  }
-};
-
-// Alternative method untuk resolve URL
-const alternativeResolveMethod = async (url) => {
-  try {
-    // Coba dengan cloudscraper dan manual redirect tracking
-    const response = await cloudscraper.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      },
-      followRedirect: false,
-      timeout: 10000
-    });
-    
-    // Check for redirect headers
-    if (response.request && response.request.uri && response.request.uri.href) {
-      const redirectedUrl = response.request.uri.href;
-      if (redirectedUrl.includes('pinterest.com/pin/')) {
-        return redirectedUrl;
-      }
-    }
-    
-    return url;
-  } catch (error) {
-    console.error('Alternative resolve method failed:', error);
-    return url;
-  }
-};
-
 export default async function handler(request, response) {
   // Set CORS headers
   response.setHeader('Access-Control-Allow-Credentials', true);
@@ -107,31 +35,12 @@ export default async function handler(request, response) {
       return response.status(400).json({ success: false, error: 'URL tidak valid. Pastikan URL berasal dari Pinterest.' });
     }
 
-    let finalUrl = url;
+    let html;
     let browser;
 
-    // Resolve short URLs first (hanya untuk pin.it)
-    if (url.includes('pin.it')) {
-      try {
-        finalUrl = await resolvePinterestUrl(url);
-        console.log('Resolved URL:', finalUrl);
-        
-        // Jika resolve gagal, gunakan URL asli
-        if (!finalUrl.includes('pinterest.com/pin/')) {
-          console.log('URL resolution tidak berhasil, menggunakan URL asli dengan savepin');
-          finalUrl = url; // Kembali ke URL asli untuk diproses savepin
-        }
-      } catch (error) {
-        console.log('URL resolution failed, using original URL with savepin');
-        finalUrl = url;
-      }
-    }
-
-    let html;
-
     try {
-      // Gunakan savepin.app untuk proses download
-      const savepinUrl = `https://www.savepin.app/download.php?url=${encodeURIComponent(finalUrl)}&lang=en&type=redirect`;
+      // Langsung gunakan savepin.app tanpa resolve URL
+      const savepinUrl = `https://www.savepin.app/download.php?url=${encodeURIComponent(url)}&lang=en&type=redirect`;
       
       // First try with cloudscraper
       html = await cloudscraper.get(savepinUrl, {
@@ -152,7 +61,7 @@ export default async function handler(request, response) {
       const page = await browser.newPage();
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
       
-      const savepinUrl = `https://www.savepin.app/download.php?url=${encodeURIComponent(finalUrl)}&lang=en&type=redirect`;
+      const savepinUrl = `https://www.savepin.app/download.php?url=${encodeURIComponent(url)}&lang=en&type=redirect`;
       await page.goto(savepinUrl, { 
         waitUntil: 'domcontentloaded',
         timeout: 30000 
@@ -191,7 +100,6 @@ export default async function handler(request, response) {
       success: true,
       data: {
         originalUrl: url,
-        resolvedUrl: finalUrl.includes('pinterest.com/pin/') ? finalUrl : 'Tidak berhasil di-resolve',
         media: {
           video: videoUrl,
           image: imageUrl
