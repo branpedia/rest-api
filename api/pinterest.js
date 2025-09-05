@@ -2,7 +2,6 @@ import axios from 'axios';
 import cheerio from 'cheerio';
 import cloudscraper from 'cloudscraper';
 import { JSDOM } from 'jsdom';
-import puppeteer from 'puppeteer';
 
 // Function to resolve Pinterest short URLs
 const resolvePinterestUrl = async (url) => {
@@ -69,7 +68,6 @@ export default async function handler(request, response) {
     }
 
     let pinterestUrl = url;
-    let browser;
 
     try {
       // Step 1: Resolve shortlink dengan axios
@@ -128,7 +126,7 @@ export default async function handler(request, response) {
     } catch (error) {
       console.log('Axios+Cheerio failed, trying with Cloudscraper...');
 
-      // Fallback ke Cloudscraper
+      // Fallback ke Cloudscraper + JSDOM
       try {
         const savepinUrl = `https://www.savepin.app/download.php?url=${encodeURIComponent(pinterestUrl)}&lang=en&type=redirect`;
         const html = await cloudscraper.get(savepinUrl, {
@@ -174,58 +172,8 @@ export default async function handler(request, response) {
         });
 
       } catch (cloudError) {
-        console.log('Cloudscraper failed, trying with Puppeteer...');
-
-        // Final fallback ke Puppeteer
-        browser = await puppeteer.launch({
-          headless: true,
-          args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
-
-        const page = await browser.newPage();
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-
-        const savepinUrl = `https://www.savepin.app/download.php?url=${encodeURIComponent(pinterestUrl)}&lang=en&type=redirect`;
-        await page.goto(savepinUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-
-        const html = await page.content();
-        await browser.close();
-
-        const dom = new JSDOM(html);
-        const document = dom.window.document;
-
-        const extractMediaUrl = (element) => {
-          const href = element.getAttribute('href');
-          if (!href) return null;
-          const match = href.match(/url=([^&]+)/);
-          return match ? decodeURIComponent(match[1]) : null;
-        };
-
-        const videoElements = document.querySelectorAll('a[href*="force-save.php?url="][href*=".mp4"]');
-        const imageElements = document.querySelectorAll('a[href*="force-save.php?url="][href*=".jpg"], a[href*="force-save.php?url="][href*=".png"], a[href*="force-save.php?url="][href*=".jpeg"]');
-
-        const videoUrl = videoElements.length > 0 ? extractMediaUrl(videoElements[0]) : null;
-        const imageUrl = imageElements.length > 0 ? extractMediaUrl(imageElements[0]) : null;
-
-        if (!videoUrl && !imageUrl) {
-          return response.status(404).json({ 
-            success: false, 
-            error: 'Tidak dapat menemukan media.' 
-          });
-        }
-
-        return response.status(200).json({
-          success: true,
-          data: {
-            originalUrl: url,
-            resolvedUrl: pinterestUrl,
-            media: {
-              video: videoUrl,
-              image: imageUrl
-            },
-            type: videoUrl ? 'video' : 'image'
-          }
-        });
+        console.error('Cloudscraper failed:', cloudError);
+        throw new Error('Semua metode gagal');
       }
     }
 
