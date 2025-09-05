@@ -1,4 +1,6 @@
-import axios from 'axios';
+import cloudscraper from 'cloudscraper';
+import { JSDOM } from 'jsdom';
+import puppeteer from 'puppeteer';
 
 export default async function handler(request, response) {
   // Set CORS headers
@@ -24,42 +26,40 @@ export default async function handler(request, response) {
   const { url, retry = 0 } = request.query;
 
   if (!url) {
-    return response.status(400).json({ 
-      success: false, 
-      error: 'Parameter URL diperlukan. Contoh: ?url=https://videy.co/v/?id=abc123' 
-    });
+    return response.status(400).json({ success: false, error: 'Parameter URL diperlukan' });
   }
 
   try {
-    // Extract video ID
+    // Validate Videy URL
+    if (!url.includes('videy.co') || !url.includes('id=')) {
+      return response.status(400).json({ success: false, error: 'URL tidak valid. Pastikan URL berasal dari Videy.co dan mengandung parameter id.' });
+    }
+
+    let html;
+    let browser;
+
+    // Extract video ID from URL
     const videoIdMatch = url.match(/[?&]id=([^&]+)/i);
     if (!videoIdMatch) {
-      return response.status(400).json({ 
-        success: false, 
-        error: 'Format URL salah! Pastikan URL mengandung parameter id. Contoh: https://videy.co/v/?id=xxxx' 
-      });
+      return response.status(400).json({ success: false, error: 'Format URL salah! Pastikan URL mengandung parameter id.' });
     }
 
     const videoId = videoIdMatch[1];
-    const videoUrl = `https://cdn.videy.co/${videoId}.mp4`;
+    const directVideoUrl = `https://cdn.videy.co/${videoId}.mp4`;
 
     try {
-      // Get video details dengan HEAD request
-      const headRes = await axios.head(videoUrl, {
+      // First try with cloudscraper to check if video exists
+      const headResponse = await cloudscraper.head(directVideoUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        },
-        timeout: 10000
+        }
       });
 
-      const fileSize = headRes.headers['content-length'];
-      const contentType = headRes.headers['content-type'];
+      const fileSize = headResponse.request.headers['content-length'];
+      const contentType = headResponse.request.headers['content-type'];
 
-      if (!fileSize || !contentType.includes('video')) {
-        return response.status(404).json({ 
-          success: false, 
-          error: 'Video tidak ditemukan atau tidak valid' 
-        });
+      if (!contentType.includes('video')) {
+        throw new Error('URL tidak mengarah ke video yang valid');
       }
 
       // Format file size
@@ -70,63 +70,103 @@ export default async function handler(request, response) {
         return `${parseFloat((bytes / Math.pow(1024, i)).toFixed(2))} ${sizes[i]}`;
       };
 
-      // Return video information
       return response.status(200).json({
         success: true,
         data: {
+          name: `${videoId}.mp4`,
+          size: formatSize(fileSize),
+          extension: 'mp4',
+          uploaded: 'Unknown', // Videy tidak menyediakan info upload time
+          downloadUrl: directVideoUrl,
           videoId: videoId,
-          downloadUrl: videoUrl,
-          fileSize: formatSize(fileSize),
-          fileSizeBytes: parseInt(fileSize),
-          contentType: contentType,
           details: {
             platform: 'Videy.co',
-            quality: 'Original'
+            quality: 'Original',
+            contentLength: fileSize,
+            contentType: contentType
           }
         }
       });
 
     } catch (error) {
-      console.error('Video check error:', error.message);
-      
-      // Jika HEAD request gagal, coba dengan GET request untuk memastikan
+      console.log('Direct video check failed, trying to scrape Videy page...');
+
+      // If direct check fails, try to scrape the Videy page
       try {
-        const getRes = await axios.get(videoUrl, {
+        // First try with cloudscraper
+        html = await cloudscraper.get(url, {
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Range': 'bytes=0-100' // Hanya request sebagian kecil untuk checking
-          },
-          timeout: 5000
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          }
         });
-
-        if (getRes.status === 206) { // Partial content
-          return response.status(200).json({
-            success: true,
-            data: {
-              videoId: videoId,
-              downloadUrl: videoUrl,
-              fileSize: 'Unknown (video tersedia)',
-              fileSizeBytes: 0,
-              contentType: getRes.headers['content-type'] || 'video/mp4',
-              details: {
-                platform: 'Videy.co',
-                quality: 'Original',
-                note: 'File size tidak dapat ditentukan'
-              }
-            }
-          });
-        }
-
-      } catch (getError) {
-        console.error('GET request also failed:', getError.message);
-        throw new Error('Video tidak tersedia atau telah dihapus');
+      } catch (cloudError) {
+        console.log('Cloudscraper failed, trying with Puppeteer...');
+        
+        // If cloudscraper fails, use Puppeteer as fallback
+        browser = await puppeteer.launch({
+          headless: true,
+          args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+        
+        const page = await browser.newPage();
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        await page.goto(url, { waitUntil: 'networkidle2' });
+        
+        html = await page.content();
+        await browser.close();
       }
 
-      throw new Error('Video tidak dapat diakses');
+      // Parse HTML to extract information
+      const dom = new JSDOM(html);
+      const document = dom.window.document;
+
+      // Try to find video information from the page
+      const titleElement = document.querySelector('title');
+      const pageTitle = titleElement ? titleElement.textContent.trim() : `Videy_${videoId}`;
+
+      // Look for video elements or metadata
+      const videoElements = document.querySelectorAll('video');
+      let videoSource = '';
+
+      if (videoElements.length > 0) {
+        const sourceElement = videoElements[0].querySelector('source');
+        if (sourceElement) {
+          videoSource = sourceElement.getAttribute('src');
+        }
+      }
+
+      // If no video source found in page, use the direct CDN URL
+      const finalDownloadUrl = videoSource || directVideoUrl;
+
+      return response.status(200).json({
+        success: true,
+        data: {
+          name: `${pageTitle.replace(/[^a-zA-Z0-9]/g, '_')}.mp4`,
+          size: 'Unknown', // Size tidak bisa didapatkan dari halaman
+          extension: 'mp4',
+          uploaded: 'Unknown',
+          downloadUrl: finalDownloadUrl,
+          videoId: videoId,
+          details: {
+            platform: 'Videy.co',
+            quality: 'Original',
+            note: videoSource ? 'Video source ditemukan di halaman' : 'Menggunakan CDN langsung'
+          }
+        }
+      });
     }
 
   } catch (error) {
-    console.error('Error fetching Videy data:', error.message);
+    console.error('Error fetching Videy data:', error);
+    
+    // Clean up browser if it's still open
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (e) {
+        console.error('Error closing browser:', e);
+      }
+    }
     
     // Retry logic
     if (retry < 2) {
@@ -136,7 +176,7 @@ export default async function handler(request, response) {
     
     return response.status(500).json({ 
       success: false, 
-      error: error.message || 'Gagal mengunduh video dari Videy.co. Pastikan URL valid dan coba lagi.' 
+      error: 'Gagal mengambil data dari Videy.co. Pastikan URL valid dan coba lagi.' 
     });
   }
 }
