@@ -1,4 +1,6 @@
 import cloudscraper from 'cloudscraper';
+import { JSDOM } from 'jsdom';
+import puppeteer from 'puppeteer';
 
 export default async function handler(request, response) {
   // Set CORS headers
@@ -16,11 +18,12 @@ export default async function handler(request, response) {
     return;
   }
 
+  // Only allow GET requests
   if (request.method !== 'GET') {
     return response.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const { url } = request.query;
+  const { url, retry = 0 } = request.query;
 
   if (!url) {
     return response.status(400).json({ success: false, error: 'Parameter URL diperlukan' });
@@ -29,66 +32,144 @@ export default async function handler(request, response) {
   try {
     // Validate Videy URL
     if (!url.includes('videy.co') || !url.includes('id=')) {
-      return response.status(400).json({ success: false, error: 'URL tidak valid' });
+      return response.status(400).json({ success: false, error: 'URL tidak valid. Pastikan URL berasal dari Videy.co dan mengandung parameter id.' });
     }
 
-    // Extract video ID
+    // Extract video ID from URL
     const videoIdMatch = url.match(/[?&]id=([^&]+)/i);
     if (!videoIdMatch) {
-      return response.status(400).json({ success: false, error: 'Format URL salah' });
+      return response.status(400).json({ success: false, error: 'Format URL salah! Pastikan URL mengandung parameter id.' });
     }
 
     const videoId = videoIdMatch[1];
-    const videoUrl = `https://cdn.videy.co/${videoId}.mp4`;
+    const directVideoUrl = `https://cdn.videy.co/${videoId}.mp4`;
 
-    // Get video info
+    let fileSize = null;
+    let contentType = null;
+    let browser;
+
     try {
-      const headResponse = await cloudscraper.head(videoUrl, {
+      // First try with cloudscraper to get video headers
+      const headResponse = await cloudscraper.head(directVideoUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         },
         timeout: 10000
       });
 
-      const fileSize = headResponse.request.headers['content-length'];
-      const contentType = headResponse.request.headers['content-type'];
-
-      // Format size
-      const formatSize = (bytes) => {
-        if (!bytes) return 'Unknown';
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(1024));
-        return `${parseFloat((bytes / Math.pow(1024, i)).toFixed(2))} ${sizes[i]}`;
-      };
-
-      return response.status(200).json({
-        success: true,
-        data: {
-          creator: "branpedia",
-          size: formatSize(fileSize),
-          format: "mp4",
-          downloadUrl: videoUrl
-        }
-      });
+      // Get headers from cloudscraper response
+      fileSize = headResponse.request.headers['content-length'];
+      contentType = headResponse.request.headers['content-type'];
 
     } catch (error) {
-      // If HEAD fails, just return the download URL without size info
-      return response.status(200).json({
-        success: true,
-        data: {
-          creator: "branpedia",
-          size: "Unknown",
-          format: "mp4",
-          downloadUrl: videoUrl
+      console.log('Cloudscraper HEAD failed, trying with axios...');
+      
+      // Fallback to axios for HEAD request
+      try {
+        const axios = await import('axios');
+        const headRes = await axios.default.head(directVideoUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          },
+          timeout: 10000
+        });
+        
+        fileSize = headRes.headers['content-length'];
+        contentType = headRes.headers['content-type'];
+        
+      } catch (axiosError) {
+        console.log('Axios HEAD also failed, trying Puppeteer...');
+        
+        // Final fallback: use Puppeteer to get video info
+        try {
+          browser = await puppeteer.launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+          });
+          
+          const page = await browser.newPage();
+          await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+          
+          // Use abort() for non-essential requests to speed up loading
+          await page.setRequestInterception(true);
+          page.on('request', request => {
+            if (request.resourceType() !== 'document') {
+              request.abort();
+            } else {
+              request.continue();
+            }
+          });
+          
+          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+          
+          await browser.close();
+          
+          // Return simple response even if size is unknown
+          return response.status(200).json({
+            success: true,
+            data: {
+              creator: "branpedia",
+              size: "Unknown",
+              format: "mp4",
+              downloadUrl: directVideoUrl
+            }
+          });
+          
+        } catch (puppeteerError) {
+          console.error('Puppeteer failed:', puppeteerError);
+          // Return basic info even if all methods fail
+          return response.status(200).json({
+            success: true,
+            data: {
+              creator: "branpedia",
+              size: "Unknown",
+              format: "mp4",
+              downloadUrl: directVideoUrl
+            }
+          });
         }
-      });
+      }
     }
 
+    // Format file size
+    const formatSize = (bytes) => {
+      if (!bytes) return 'Unknown';
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(1024));
+      return `${parseFloat((bytes / Math.pow(1024, i)).toFixed(2))} ${sizes[i]}`;
+    };
+
+    return response.status(200).json({
+      success: true,
+      data: {
+        creator: "branpedia",
+        size: formatSize(fileSize),
+        format: "mp4",
+        downloadUrl: directVideoUrl
+      }
+    });
+
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error fetching Videy data:', error);
+    
+    // Clean up browser if it's still open
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (e) {
+        console.error('Error closing browser:', e);
+      }
+    }
+    
+    // Retry logic
+    if (retry < 2) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return handler({ ...request, query: { ...request.query, retry: parseInt(retry) + 1 } }, response);
+    }
+    
     return response.status(500).json({ 
       success: false, 
-      error: 'Gagal memproses video' 
+      error: 'Gagal mengambil data dari Videy.co. Pastikan URL valid dan coba lagi.' 
     });
   }
 }
