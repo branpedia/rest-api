@@ -1,20 +1,23 @@
+import axios from 'axios';
+
 async function getToken(url) {
   try {
-    const response = await fetch(url, {
+    const response = await axios.get(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5'
       }
     });
     
-    const cookies = response.headers.get('set-cookie');
-    const joinedCookies = cookies || null;
+    const cookies = response.headers['set-cookie'];
+    const joinedCookies = cookies ? cookies.join('; ') : '';
 
-    const html = await response.text();
-    const csrfTokenMatch = html.match(/<meta name="csrf-token" content="(.*?)">/);
+    const csrfTokenMatch = response.data.match(/<meta name="csrf-token" content="(.*?)">/);
     const csrfToken = csrfTokenMatch ? csrfTokenMatch[1] : null;
 
-    if (!csrfToken || !joinedCookies) {
-      throw new Error("Gagal mendapatkan CSRF token atau cookie.");
+    if (!csrfToken) {
+      throw new Error("Gagal mendapatkan CSRF token.");
     }
 
     return { csrfToken, joinedCookies };
@@ -39,7 +42,10 @@ async function mlStalk(userId, zoneId) {
         "X-CSRF-Token": csrfToken,
         "Content-Type": "application/json",
         "Cookie": joinedCookies,
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Origin": "https://www.gempaytopup.com",
+        "Referer": "https://www.gempaytopup.com/"
       },
       body: JSON.stringify(payload)
     });
@@ -88,6 +94,7 @@ export default async function handler(request, response) {
   }
 
   try {
+    console.log('Mencari data ML untuk:', userId, zoneId);
     const result = await mlStalk(userId, zoneId);
     
     if (result) {
@@ -107,10 +114,11 @@ export default async function handler(request, response) {
       });
     }
   } catch (error) {
-    console.error('Error fetching ML data:', error);
+    console.error('Error fetching ML data:', error.message);
     
     // Retry logic
     if (retry < 2) {
+      console.log(`Retry attempt ${parseInt(retry) + 1}`);
       await new Promise(resolve => setTimeout(resolve, 1000));
       return handler({ ...request, query: { ...request.query, retry: parseInt(retry) + 1 } }, response);
     }
