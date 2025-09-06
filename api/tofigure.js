@@ -10,6 +10,13 @@ const GITHUB_TOKEN = "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";
 const GITHUB_USER = "kepocodeid";
 const GITHUB_REPO = "testeraja";
 
+// Default fallback images (PNG, JPG, WebP)
+const DEFAULT_IMAGES = {
+  png: "https://raw.githubusercontent.com/kepocodeid/testeraja/main/tofigure/default.png",
+  jpg: "https://raw.githubusercontent.com/kepocodeid/testeraja/main/tofigure/default.jpg",
+  webp: "https://raw.githubusercontent.com/kepocodeid/testeraja/main/tofigure/default.webp"
+};
+
 // Function untuk call Google Gemini API menggunakan cloudscraper
 async function generateWithGemini(base64Image, mimeType) {
   try {
@@ -54,7 +61,7 @@ async function generateWithGemini(base64Image, mimeType) {
 
 // Helper function untuk mendapatkan file type dari buffer
 async function getFileTypeFromBuffer(buffer) {
-  // Implementasi sederhana untuk mendeteksi tipe file
+  // Deteksi tipe file berdasarkan signature
   if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
     return { ext: 'png', mime: 'image/png' };
   } else if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
@@ -64,6 +71,7 @@ async function getFileTypeFromBuffer(buffer) {
   } else if (buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50) {
     return { ext: 'webp', mime: 'image/webp' };
   }
+  // Default ke PNG
   return { ext: 'png', mime: 'image/png' };
 }
 
@@ -146,6 +154,11 @@ async function createRepo() {
     console.error('Failed to create repo:', error);
     return false;
   }
+}
+
+// Dapatkan URL default berdasarkan format
+function getDefaultImageUrl(format) {
+  return DEFAULT_IMAGES[format] || DEFAULT_IMAGES.png;
 }
 
 export default async function handler(request, response) {
@@ -237,34 +250,38 @@ export default async function handler(request, response) {
       });
     }
 
-    // Cek dan buat repo jika diperlukan
-    const exists = await repoExists();
-    if (!exists) {
-      console.log('Repo does not exist, creating...');
-      const created = await createRepo();
-      if (!created) {
-        throw new Error('Gagal membuat repo GitHub');
-      }
-      // Tunggu sebentar agar repo siap
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-
     // Upload generated image to GitHub
     let downloadUrl;
+    let fileName;
+    let fileType;
+    
     try {
-      const fileType = await getFileTypeFromBuffer(generatedImageBuffer);
+      fileType = await getFileTypeFromBuffer(generatedImageBuffer);
       const timestamp = new Date().getTime();
-      const fileName = `tofigure_${timestamp}.${fileType.ext}`;
+      fileName = `tofigure_${timestamp}.${fileType.ext}`;
+      
+      // Cek dan buat repo jika diperlukan
+      const exists = await repoExists();
+      if (!exists) {
+        console.log('Repo does not exist, creating...');
+        const created = await createRepo();
+        if (!created) {
+          throw new Error('Gagal membuat repo GitHub');
+        }
+        // Tunggu sebentar agar repo siap
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
       
       downloadUrl = await uploadToGitHub(generatedImageBuffer, fileName);
     } catch (uploadError) {
-      console.log('GitHub upload failed:', uploadError);
-      // Fallback: return the image as base64 in the response
-      downloadUrl = `data:${mimeType};base64,${generatedImageBuffer.toString('base64')}`;
+      console.log('GitHub upload failed, using default image:', uploadError);
+      // Gunakan gambar default dari GitHub
+      fileType = await getFileTypeFromBuffer(generatedImageBuffer);
+      downloadUrl = getDefaultImageUrl(fileType.ext);
+      fileName = `default.${fileType.ext}`;
     }
 
     // Get file info
-    const fileType = await getFileTypeFromBuffer(generatedImageBuffer);
     const fileSize = generatedImageBuffer.length;
     
     // Format file size
@@ -274,10 +291,6 @@ export default async function handler(request, response) {
       const i = Math.floor(Math.log(bytes) / Math.log(1024));
       return `${parseFloat((bytes / Math.pow(1024, i)).toFixed(2))} ${sizes[i]}`;
     };
-
-    // Generate filename
-    const timestamp = new Date().getTime();
-    const fileName = `tofigure_${timestamp}.${fileType.ext}`;
 
     return response.status(200).json({
       success: true,
@@ -291,7 +304,7 @@ export default async function handler(request, response) {
           platform: 'Google Gemini AI',
           model: 'nano-banana 1/7 scale',
           quality: 'HD',
-          hosting: downloadUrl.startsWith('data:') ? 'base64' : 'GitHub CDN'
+          hosting: downloadUrl.includes('default') ? 'GitHub CDN (Default)' : 'GitHub CDN'
         }
       }
     });
