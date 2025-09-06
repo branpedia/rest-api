@@ -10,13 +10,6 @@ const GITHUB_TOKEN = "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";
 const GITHUB_USER = "kepocodeid";
 const GITHUB_REPO = "testeraja";
 
-// Default fallback images (PNG, JPG, WebP)
-const DEFAULT_IMAGES = {
-  png: "https://raw.githubusercontent.com/kepocodeid/testeraja/main/tofigure/default.png",
-  jpg: "https://raw.githubusercontent.com/kepocodeid/testeraja/main/tofigure/default.jpg",
-  webp: "https://raw.githubusercontent.com/kepocodeid/testeraja/main/tofigure/default.webp"
-};
-
 // Function untuk call Google Gemini API menggunakan cloudscraper
 async function generateWithGemini(base64Image, mimeType) {
   try {
@@ -75,12 +68,30 @@ async function getFileTypeFromBuffer(buffer) {
   return { ext: 'png', mime: 'image/png' };
 }
 
-// Upload function untuk GitHub
+// Upload function untuk GitHub - FIXED VERSION
 async function uploadToGitHub(buffer, filename) {
   try {
     const content = buffer.toString('base64');
     const pathInRepo = `tofigure/${filename}`;
     const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${pathInRepo}`;
+
+    // Cek dulu apakah file sudah ada
+    let sha = null;
+    try {
+      const checkResponse = await cloudscraper.get({
+        uri: url,
+        headers: {
+          'Authorization': `token ${GITHUB_TOKEN}`,
+          'User-Agent': 'ToFigure-App'
+        },
+        timeout: 10000
+      });
+      const existingFile = JSON.parse(checkResponse);
+      sha = existingFile.sha;
+    } catch (error) {
+      // File belum ada, tidak masalah
+      console.log('File does not exist yet, will create new');
+    }
 
     const response = await cloudscraper.put({
       uri: url,
@@ -91,7 +102,8 @@ async function uploadToGitHub(buffer, filename) {
       },
       body: JSON.stringify({
         message: `Upload ${filename} via ToFigure`,
-        content: content
+        content: content,
+        ...(sha && { sha: sha }) // Include sha jika file sudah ada (untuk update)
       }),
       timeout: 30000
     });
@@ -107,7 +119,7 @@ async function uploadToGitHub(buffer, filename) {
     }
   } catch (error) {
     console.error('GitHub upload error:', error);
-    throw new Error('Gagal mengupload gambar ke GitHub');
+    throw new Error('Gagal mengupload gambar ke GitHub: ' + error.message);
   }
 }
 
@@ -152,13 +164,28 @@ async function createRepo() {
     return true;
   } catch (error) {
     console.error('Failed to create repo:', error);
-    return false;
+    throw new Error('Gagal membuat repo GitHub: ' + error.message);
   }
 }
 
-// Dapatkan URL default berdasarkan format
-function getDefaultImageUrl(format) {
-  return DEFAULT_IMAGES[format] || DEFAULT_IMAGES.png;
+// Fungsi untuk memastikan repo siap
+async function ensureRepoReady() {
+  try {
+    const exists = await repoExists();
+    if (!exists) {
+      console.log('Repo does not exist, creating...');
+      const created = await createRepo();
+      if (!created) {
+        throw new Error('Gagal membuat repo GitHub');
+      }
+      // Tunggu sebentar agar repo siap
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+    return true;
+  } catch (error) {
+    console.error('Error ensuring repo ready:', error);
+    throw error;
+  }
 }
 
 export default async function handler(request, response) {
@@ -250,6 +277,9 @@ export default async function handler(request, response) {
       });
     }
 
+    // Pastikan repo siap
+    await ensureRepoReady();
+
     // Upload generated image to GitHub
     let downloadUrl;
     let fileName;
@@ -260,25 +290,15 @@ export default async function handler(request, response) {
       const timestamp = new Date().getTime();
       fileName = `tofigure_${timestamp}.${fileType.ext}`;
       
-      // Cek dan buat repo jika diperlukan
-      const exists = await repoExists();
-      if (!exists) {
-        console.log('Repo does not exist, creating...');
-        const created = await createRepo();
-        if (!created) {
-          throw new Error('Gagal membuat repo GitHub');
-        }
-        // Tunggu sebentar agar repo siap
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-      
       downloadUrl = await uploadToGitHub(generatedImageBuffer, fileName);
+      console.log('Successfully uploaded to GitHub:', downloadUrl);
     } catch (uploadError) {
-      console.log('GitHub upload failed, using default image:', uploadError);
-      // Gunakan gambar default dari GitHub
-      fileType = await getFileTypeFromBuffer(generatedImageBuffer);
-      downloadUrl = getDefaultImageUrl(fileType.ext);
-      fileName = `default.${fileType.ext}`;
+      console.log('GitHub upload failed:', uploadError);
+      // Jika upload gagal, return error
+      return response.status(500).json({ 
+        success: false, 
+        error: 'Gagal mengupload gambar ke GitHub: ' + uploadError.message
+      });
     }
 
     // Get file info
@@ -304,7 +324,7 @@ export default async function handler(request, response) {
           platform: 'Google Gemini AI',
           model: 'nano-banana 1/7 scale',
           quality: 'HD',
-          hosting: downloadUrl.includes('default') ? 'GitHub CDN (Default)' : 'GitHub CDN'
+          hosting: 'GitHub CDN'
         }
       }
     });
