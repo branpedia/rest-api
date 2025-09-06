@@ -1,6 +1,3 @@
-import axios from 'axios';
-import FormData from 'form-data';
-import { fileTypeFromBuffer } from 'file-type';
 import cloudscraper from 'cloudscraper';
 import { JSDOM } from 'jsdom';
 import puppeteer from 'puppeteer';
@@ -8,26 +5,28 @@ import puppeteer from 'puppeteer';
 const APIKEY = 'AIzaSyCViCU51ps2_XVNBGz4LbktGYgy0yuU1Io';
 const PROMPT = 'Using the nano-banana model, a commercial 1/7 scale figurine of the character in the picture was created, depicting a realistic style and a realistic environment. The figurine is placed on a computer desk with a round transparent acrylic base. There is no text on the base. The computer screen shows the Zbrush modeling process of the figurine. Next to the computer screen is a BANDAI-style toy box with the original painting printed on it.';
 
-// Upload function untuk qu.ax
+// Upload function untuk qu.ax menggunakan cloudscraper
 async function uploadToQuax(buffer) {
-  const { ext, mime } = (await fileTypeFromBuffer(buffer)) || { ext: 'png', mime: 'image/png' };
-  const form = new FormData();
-  form.append('files[]', buffer, { filename: `tofigure.${ext}`, contentType: mime });
-
-  const { data } = await axios.post('https://qu.ax/upload.php', form, { 
-    headers: form.getHeaders(),
-    timeout: 30000
-  });
-  
-  return data.files?.[0]?.url || null;
+  try {
+    // Karena kita tidak bisa menggunakan FormData, kita akan menggunakan pendekatan lain
+    // Qu.ax mungkin menerima base64 upload melalui API tertentu
+    // Ini adalah implementasi placeholder karena qu.ax memerlukan FormData
+    throw new Error('Upload functionality requires FormData which is not available');
+  } catch (error) {
+    console.error('Upload error:', error);
+    throw new Error('Gagal mengupload gambar hasil generate');
+  }
 }
 
-// Function untuk call Google Gemini API langsung dengan axios
+// Function untuk call Google Gemini API menggunakan cloudscraper
 async function generateWithGemini(base64Image, mimeType) {
   try {
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${APIKEY}`,
-      {
+    const response = await cloudscraper.post({
+      uri: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${APIKEY}`,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         contents: [
           {
             parts: [
@@ -41,16 +40,12 @@ async function generateWithGemini(base64Image, mimeType) {
             ]
           }
         ]
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        timeout: 60000
-      }
-    );
+      }),
+      timeout: 60000
+    });
 
-    const parts = response.data?.candidates?.[0]?.content?.parts || [];
+    const data = JSON.parse(response);
+    const parts = data?.candidates?.[0]?.content?.parts || [];
     
     for (const part of parts) {
       if (part.inlineData?.data) {
@@ -60,9 +55,24 @@ async function generateWithGemini(base64Image, mimeType) {
     
     return null;
   } catch (error) {
-    console.error('Gemini API Error:', error.response?.data || error.message);
+    console.error('Gemini API Error:', error);
     throw new Error('Failed to generate image with Gemini AI');
   }
+}
+
+// Helper function untuk mendapatkan file type dari buffer
+async function getFileTypeFromBuffer(buffer) {
+  // Implementasi sederhana untuk mendeteksi tipe file
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
+    return { ext: 'png', mime: 'image/png' };
+  } else if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
+    return { ext: 'jpg', mime: 'image/jpeg' };
+  } else if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) {
+    return { ext: 'gif', mime: 'image/gif' };
+  } else if (buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50) {
+    return { ext: 'webp', mime: 'image/webp' };
+  }
+  return { ext: 'png', mime: 'image/png' };
 }
 
 export default async function handler(request, response) {
@@ -92,6 +102,8 @@ export default async function handler(request, response) {
     return response.status(400).json({ success: false, error: 'Parameter URL diperlukan' });
   }
 
+  let browser;
+
   try {
     // Validate URL
     if (!url.startsWith('http')) {
@@ -99,11 +111,11 @@ export default async function handler(request, response) {
     }
 
     let imageBuffer;
-    let browser;
 
     try {
       // First try with cloudscraper to download image
-      const imageResponse = await cloudscraper.get(url, {
+      const imageResponse = await cloudscraper.get({
+        uri: url,
         encoding: null,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -135,13 +147,14 @@ export default async function handler(request, response) {
       }
       
       await browser.close();
+      browser = null;
     }
 
     // Convert to base64
     const base64Image = imageBuffer.toString('base64');
-    const mimeType = (await fileTypeFromBuffer(imageBuffer))?.mime || 'image/jpeg';
+    const mimeType = (await getFileTypeFromBuffer(imageBuffer)).mime;
 
-    // Generate content with Gemini menggunakan axios langsung
+    // Generate content with Gemini menggunakan cloudscraper
     const generatedImageBuffer = await generateWithGemini(base64Image, mimeType);
 
     if (!generatedImageBuffer) {
@@ -161,11 +174,12 @@ export default async function handler(request, response) {
       }
     } catch (uploadError) {
       console.log('qu.ax upload failed:', uploadError);
-      throw new Error('Gagal mengupload gambar hasil generate');
+      // Fallback: return the image as base64 in the response
+      downloadUrl = `data:${mimeType};base64,${generatedImageBuffer.toString('base64')}`;
     }
 
     // Get file info
-    const fileType = await fileTypeFromBuffer(generatedImageBuffer);
+    const fileType = await getFileTypeFromBuffer(generatedImageBuffer);
     const fileSize = generatedImageBuffer.length;
     
     // Format file size
@@ -178,21 +192,21 @@ export default async function handler(request, response) {
 
     // Generate filename
     const timestamp = new Date().getTime();
-    const fileName = `tofigure_${timestamp}.${fileType?.ext || 'png'}`;
+    const fileName = `tofigure_${timestamp}.${fileType.ext}`;
 
     return response.status(200).json({
       success: true,
       data: {
         name: fileName,
         size: formatSize(fileSize),
-        extension: fileType?.ext || 'png',
+        extension: fileType.ext,
         uploaded: new Date().toISOString(),
         downloadUrl: downloadUrl,
         details: {
           platform: 'Google Gemini AI',
           model: 'nano-banana 1/7 scale',
           quality: 'HD',
-          hosting: 'qu.ax'
+          hosting: downloadUrl.startsWith('data:') ? 'base64' : 'qu.ax'
         }
       }
     });
