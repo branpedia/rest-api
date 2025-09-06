@@ -5,18 +5,10 @@ import puppeteer from 'puppeteer';
 const APIKEY = 'AIzaSyCViCU51ps2_XVNBGz4LbktGYgy0yuU1Io';
 const PROMPT = 'Using the nano-banana model, a commercial 1/7 scale figurine of the character in the picture was created, depicting a realistic style and a realistic environment. The figurine is placed on a computer desk with a round transparent acrylic base. There is no text on the base. The computer screen shows the Zbrush modeling process of the figurine. Next to the computer screen is a BANDAI-style toy box with the original painting printed on it.';
 
-// Upload function untuk qu.ax menggunakan cloudscraper
-async function uploadToQuax(buffer) {
-  try {
-    // Karena kita tidak bisa menggunakan FormData, kita akan menggunakan pendekatan lain
-    // Qu.ax mungkin menerima base64 upload melalui API tertentu
-    // Ini adalah implementasi placeholder karena qu.ax memerlukan FormData
-    throw new Error('Upload functionality requires FormData which is not available');
-  } catch (error) {
-    console.error('Upload error:', error);
-    throw new Error('Gagal mengupload gambar hasil generate');
-  }
-}
+// Konfigurasi GitHub
+const GITHUB_TOKEN = "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";
+const GITHUB_USER = "kepocodeid";
+const GITHUB_REPO = "testeraja";
 
 // Function untuk call Google Gemini API menggunakan cloudscraper
 async function generateWithGemini(base64Image, mimeType) {
@@ -73,6 +65,87 @@ async function getFileTypeFromBuffer(buffer) {
     return { ext: 'webp', mime: 'image/webp' };
   }
   return { ext: 'png', mime: 'image/png' };
+}
+
+// Upload function untuk GitHub
+async function uploadToGitHub(buffer, filename) {
+  try {
+    const content = buffer.toString('base64');
+    const pathInRepo = `tofigure/${filename}`;
+    const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${pathInRepo}`;
+
+    const response = await cloudscraper.put({
+      uri: url,
+      headers: {
+        'Authorization': `token ${GITHUB_TOKEN}`,
+        'User-Agent': 'ToFigure-App',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: `Upload ${filename} via ToFigure`,
+        content: content
+      }),
+      timeout: 30000
+    });
+
+    const data = JSON.parse(response);
+    
+    if (data.content && data.content.download_url) {
+      // Menggunakan raw.githubusercontent.com untuk CDN
+      return `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${pathInRepo}`;
+    } else {
+      console.error('GitHub upload error:', data);
+      throw new Error('Upload ke GitHub gagal: ' + (data.message || 'Unknown error'));
+    }
+  } catch (error) {
+    console.error('GitHub upload error:', error);
+    throw new Error('Gagal mengupload gambar ke GitHub');
+  }
+}
+
+// Cek apakah repo ada
+async function repoExists() {
+  try {
+    const response = await cloudscraper.get({
+      uri: `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}`,
+      headers: {
+        'Authorization': `token ${GITHUB_TOKEN}`,
+        'User-Agent': 'ToFigure-App'
+      },
+      timeout: 10000
+    });
+    
+    return true;
+  } catch (error) {
+    console.log('Repo does not exist or cannot be accessed:', error);
+    return false;
+  }
+}
+
+// Buat repo kalau belum ada
+async function createRepo() {
+  try {
+    const response = await cloudscraper.post({
+      uri: 'https://api.github.com/user/repos',
+      headers: {
+        'Authorization': `token ${GITHUB_TOKEN}`,
+        'User-Agent': 'ToFigure-App',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        name: GITHUB_REPO,
+        private: false,
+        auto_init: true,
+        description: 'Repo untuk menyimpan hasil generate ToFigure'
+      }),
+      timeout: 15000
+    });
+    
+    return true;
+  } catch (error) {
+    console.error('Failed to create repo:', error);
+    return false;
+  }
 }
 
 export default async function handler(request, response) {
@@ -164,16 +237,28 @@ export default async function handler(request, response) {
       });
     }
 
-    // Upload generated image to qu.ax
+    // Cek dan buat repo jika diperlukan
+    const exists = await repoExists();
+    if (!exists) {
+      console.log('Repo does not exist, creating...');
+      const created = await createRepo();
+      if (!created) {
+        throw new Error('Gagal membuat repo GitHub');
+      }
+      // Tunggu sebentar agar repo siap
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+
+    // Upload generated image to GitHub
     let downloadUrl;
     try {
-      downloadUrl = await uploadToQuax(generatedImageBuffer);
+      const fileType = await getFileTypeFromBuffer(generatedImageBuffer);
+      const timestamp = new Date().getTime();
+      const fileName = `tofigure_${timestamp}.${fileType.ext}`;
       
-      if (!downloadUrl) {
-        throw new Error('Upload ke qu.ax gagal');
-      }
+      downloadUrl = await uploadToGitHub(generatedImageBuffer, fileName);
     } catch (uploadError) {
-      console.log('qu.ax upload failed:', uploadError);
+      console.log('GitHub upload failed:', uploadError);
       // Fallback: return the image as base64 in the response
       downloadUrl = `data:${mimeType};base64,${generatedImageBuffer.toString('base64')}`;
     }
@@ -206,7 +291,7 @@ export default async function handler(request, response) {
           platform: 'Google Gemini AI',
           model: 'nano-banana 1/7 scale',
           quality: 'HD',
-          hosting: downloadUrl.startsWith('data:') ? 'base64' : 'qu.ax'
+          hosting: downloadUrl.startsWith('data:') ? 'base64' : 'GitHub CDN'
         }
       }
     });
