@@ -1,4 +1,3 @@
-import { GoogleGenAI } from '@google/genai';
 import axios from 'axios';
 import FormData from 'form-data';
 import { fileTypeFromBuffer } from 'file-type';
@@ -21,6 +20,49 @@ async function uploadToQuax(buffer) {
   });
   
   return data.files?.[0]?.url || null;
+}
+
+// Function untuk call Google Gemini API langsung dengan axios
+async function generateWithGemini(base64Image, mimeType) {
+  try {
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${APIKEY}`,
+      {
+        contents: [
+          {
+            parts: [
+              { text: PROMPT },
+              {
+                inlineData: {
+                  mimeType: mimeType,
+                  data: base64Image
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 60000
+      }
+    );
+
+    const parts = response.data?.candidates?.[0]?.content?.parts || [];
+    
+    for (const part of parts) {
+      if (part.inlineData?.data) {
+        return Buffer.from(part.inlineData.data, 'base64');
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Gemini API Error:', error.response?.data || error.message);
+    throw new Error('Failed to generate image with Gemini AI');
+  }
 }
 
 export default async function handler(request, response) {
@@ -82,7 +124,6 @@ export default async function handler(request, response) {
       const page = await browser.newPage();
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
       
-      // Go to the URL and take screenshot if it's an image page
       await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
       
       // Try to find image element on the page
@@ -90,7 +131,6 @@ export default async function handler(request, response) {
       if (imageElement) {
         imageBuffer = await imageElement.screenshot();
       } else {
-        // If no image found, take full page screenshot
         imageBuffer = await page.screenshot({ fullPage: false });
       }
       
@@ -101,36 +141,8 @@ export default async function handler(request, response) {
     const base64Image = imageBuffer.toString('base64');
     const mimeType = (await fileTypeFromBuffer(imageBuffer))?.mime || 'image/jpeg';
 
-    // Initialize Google GenAI
-    const ai = new GoogleGenAI({ apiKey: APIKEY });
-
-    const contents = [
-      { text: PROMPT },
-      {
-        inlineData: {
-          mimeType: mimeType,
-          data: base64Image
-        }
-      }
-    ];
-
-    // Generate content with Gemini
-    const result = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image-preview',
-      contents,
-      timeout: 60000
-    });
-
-    const parts = result?.candidates?.[0]?.content?.parts || [];
-
-    // Find the generated image in the response
-    let generatedImageBuffer = null;
-    for (const part of parts) {
-      if (part.inlineData?.data) {
-        generatedImageBuffer = Buffer.from(part.inlineData.data, 'base64');
-        break;
-      }
-    }
+    // Generate content with Gemini menggunakan axios langsung
+    const generatedImageBuffer = await generateWithGemini(base64Image, mimeType);
 
     if (!generatedImageBuffer) {
       return response.status(500).json({ 
@@ -148,9 +160,7 @@ export default async function handler(request, response) {
         throw new Error('Upload ke qu.ax gagal');
       }
     } catch (uploadError) {
-      console.log('qu.ax upload failed, trying alternative methods...');
-      
-      // Fallback upload methods can be added here if needed
+      console.log('qu.ax upload failed:', uploadError);
       throw new Error('Gagal mengupload gambar hasil generate');
     }
 
@@ -207,7 +217,7 @@ export default async function handler(request, response) {
     
     return response.status(500).json({ 
       success: false, 
-      error: 'Gagal memproses gambar. Pastikan URL valid dan coba lagi.' 
+      error: error.message || 'Gagal memproses gambar. Pastikan URL valid dan coba lagi.' 
     });
   }
 }
