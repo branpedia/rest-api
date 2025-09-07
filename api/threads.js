@@ -30,9 +30,12 @@ export default async function handler(request, response) {
   }
 
   try {
-    // Validate Threads URL
-    if (!url.includes('threads.net') || !url.includes('/post/')) {
-      return response.status(400).json({ success: false, error: 'URL tidak valid. Pastikan URL berasal dari Threads.' });
+    // Validate Threads URL (accept both threads.net and threads.com)
+    if ((!url.includes('threads.net') && !url.includes('threads.com')) || !url.includes('/post/')) {
+      return response.status(400).json({ 
+        success: false, 
+        error: 'URL tidak valid. Pastikan URL berasal dari Threads (threads.net atau threads.com).' 
+      });
     }
 
     let html;
