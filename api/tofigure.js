@@ -63,52 +63,14 @@ async function getFileTypeFromBuffer(buffer) {
   return { ext: 'png', mime: 'image/png' };
 }
 
-// Upload function untuk qu.ax
+// Upload function untuk qu.ax menggunakan Puppeteer (lebih reliable)
 async function uploadToQuax(buffer) {
+  let browser;
   try {
     const { ext, mime } = await getFileTypeFromBuffer(buffer);
-    
-    // Create form data manually since we can't use FormData
-    const boundary = '----WebKitFormBoundary' + Math.random().toString(16).substring(2);
     const filename = `tofigure_${Date.now()}.${ext}`;
     
-    let formData = `--${boundary}\r\n`;
-    formData += `Content-Disposition: form-data; name="files[]"; filename="${filename}"\r\n`;
-    formData += `Content-Type: ${mime}\r\n\r\n`;
-    
-    // Convert buffer to string for the form data
-    const bufferString = buffer.toString('binary');
-    const endData = `\r\n--${boundary}--\r\n`;
-    
-    const fullBody = formData + bufferString + endData;
-    
-    const response = await cloudscraper.post({
-      uri: 'https://qu.ax/upload.php',
-      headers: {
-        'Content-Type': `multipart/form-data; boundary=${boundary}`,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      },
-      body: fullBody,
-      encoding: null,
-      timeout: 30000
-    });
-
-    // Parse response
-    const data = JSON.parse(response.toString());
-    return data.files?.[0]?.url || null;
-  } catch (error) {
-    console.error('Qu.ax upload error:', error);
-    throw new Error('Gagal mengupload gambar ke qu.ax');
-  }
-}
-
-// Alternative upload function jika yang pertama gagal
-async function uploadToQuaxAlternative(buffer) {
-  try {
-    const { ext, mime } = await getFileTypeFromBuffer(buffer);
-    
-    // Gunakan pendekatan berbeda dengan puppeteer
-    const browser = await puppeteer.launch({
+    browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
@@ -116,30 +78,142 @@ async function uploadToQuaxAlternative(buffer) {
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     
-    // Pergi ke halaman upload qu.ax
+    // Pergi ke halaman utama qu.ax
     await page.goto('https://qu.ax', { waitUntil: 'networkidle2', timeout: 30000 });
     
     // Tunggu sampai input file tersedia
     await page.waitForSelector('input[type="file"]', { timeout: 10000 });
     
+    // Simpan file ke temporary location untuk diupload
+    const fs = require('fs');
+    const path = require('path');
+    const tempDir = '/tmp';
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    
+    const tempFilePath = path.join(tempDir, filename);
+    fs.writeFileSync(tempFilePath, buffer);
+    
     // Upload file
     const inputElement = await page.$('input[type="file"]');
-    await inputElement.uploadFile({
-      name: `tofigure_${Date.now()}.${ext}`,
-      type: mime,
-      buffer: buffer
+    await inputElement.uploadFile(tempFilePath);
+    
+    // Tunggu sampai upload selesai (tunggu munculnya link)
+    await page.waitForFunction(() => {
+      const links = document.querySelectorAll('a');
+      for (let link of links) {
+        if (link.href && link.href.includes('qu.ax/') && link.href.length > 20) {
+          return link.href;
+        }
+      }
+      return null;
+    }, { timeout: 30000 });
+    
+    // Dapatkan URL dari page
+    const downloadUrl = await page.evaluate(() => {
+      const links = document.querySelectorAll('a');
+      for (let link of links) {
+        if (link.href && link.href.includes('qu.ax/') && link.href.length > 20) {
+          return link.href;
+        }
+      }
+      // Alternative: cari di text content
+      const pageText = document.body.textContent;
+      const urlMatch = pageText.match(/https:\/\/qu\.ax\/[a-zA-Z0-9]+\.(png|jpg|jpeg|gif|webp)/);
+      return urlMatch ? urlMatch[0] : null;
     });
     
-    // Tunggu sampai upload selesai dan dapatkan URL
-    await page.waitForSelector('.success-url', { timeout: 30000 });
-    const downloadUrl = await page.$eval('.success-url', el => el.href);
+    // Bersihkan file temporary
+    try {
+      fs.unlinkSync(tempFilePath);
+    } catch (e) {
+      console.log('Error deleting temp file:', e);
+    }
     
     await browser.close();
     
+    if (!downloadUrl) {
+      throw new Error('Tidak dapat menemukan URL download di halaman qu.ax');
+    }
+    
     return downloadUrl;
   } catch (error) {
-    console.error('Qu.ax alternative upload error:', error);
-    throw new Error('Gagal mengupload gambar ke qu.ax (alternative method)');
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (e) {
+        console.error('Error closing browser:', e);
+      }
+    }
+    console.error('Qu.ax upload error:', error);
+    throw new Error('Gagal mengupload gambar ke qu.ax: ' + error.message);
+  }
+}
+
+// Alternative upload function menggunakan API langsung
+async function uploadToQuaxDirect(buffer) {
+  try {
+    const { ext, mime } = await getFileTypeFromBuffer(buffer);
+    
+    // Buat form data manual
+    const boundary = '----WebKitFormBoundary' + Math.random().toString(16).substring(2);
+    const filename = `tofigure_${Date.now()}.${ext}`;
+    
+    let formData = `--${boundary}\r\n`;
+    formData += `Content-Disposition: form-data; name="files[]"; filename="${filename}"\r\n`;
+    formData += `Content-Type: ${mime}\r\n\r\n`;
+    
+    // Gabungkan form data dengan buffer
+    const formDataBuffer = Buffer.from(formData, 'utf8');
+    const endData = Buffer.from(`\r\n--${boundary}--\r\n`, 'utf8');
+    
+    const fullBody = Buffer.concat([formDataBuffer, buffer, endData]);
+    
+    const response = await cloudscraper.post({
+      uri: 'https://qu.ax/upload.php',
+      headers: {
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Content-Length': fullBody.length
+      },
+      body: fullBody,
+      encoding: null,
+      timeout: 30000
+    });
+
+    // Parse response
+    let responseData;
+    try {
+      responseData = JSON.parse(response.toString());
+    } catch (e) {
+      // Jika JSON parse gagal, coba ekstrak URL dari response text
+      const textResponse = response.toString();
+      const urlMatch = textResponse.match(/https:\/\/qu\.ax\/[a-zA-Z0-9]+\.(png|jpg|jpeg|gif|webp)/);
+      if (urlMatch) {
+        return urlMatch[0];
+      }
+      throw new Error('Response bukan JSON yang valid: ' + textResponse.substring(0, 100));
+    }
+    
+    return responseData.files?.[0]?.url || null;
+  } catch (error) {
+    console.error('Qu.ax direct upload error:', error);
+    throw error;
+  }
+}
+
+// Fungsi untuk memendekkan URL menggunakan TinyURL
+async function shortenUrl(longUrl) {
+  try {
+    const response = await cloudscraper.get({
+      uri: `https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`,
+      timeout: 10000
+    });
+    return response;
+  } catch (error) {
+    console.error('URL shortening error:', error);
+    return longUrl; // Return original URL jika shortening gagal
   }
 }
 
@@ -234,6 +308,7 @@ export default async function handler(request, response) {
 
     // Upload generated image to qu.ax
     let downloadUrl;
+    let shortUrl;
     let fileName;
     let fileType;
     
@@ -242,19 +317,23 @@ export default async function handler(request, response) {
       const timestamp = new Date().getTime();
       fileName = `tofigure_${timestamp}.${fileType.ext}`;
       
-      // Coba method pertama
-      downloadUrl = await uploadToQuax(generatedImageBuffer);
+      // Coba method direct upload pertama
+      downloadUrl = await uploadToQuaxDirect(generatedImageBuffer);
       
-      // Jika method pertama gagal, coba method alternatif
+      // Jika method direct gagal, coba method Puppeteer
       if (!downloadUrl) {
-        downloadUrl = await uploadToQuaxAlternative(generatedImageBuffer);
+        downloadUrl = await uploadToQuax(generatedImageBuffer);
       }
       
       if (!downloadUrl) {
         throw new Error('Semua metode upload ke qu.ax gagal');
       }
       
+      // Shorten URL
+      shortUrl = await shortenUrl(downloadUrl);
+      
       console.log('Successfully uploaded to qu.ax:', downloadUrl);
+      console.log('Short URL:', shortUrl);
     } catch (uploadError) {
       console.log('qu.ax upload failed:', uploadError);
       // Jika upload gagal, return error
@@ -269,10 +348,10 @@ export default async function handler(request, response) {
     
     // Format file size
     const formatSize = (bytes) => {
-      if (!bytes) return 'Unknown';
+      if (!bytes) return '0 Bytes';
       const sizes = ['Bytes', 'KB', 'MB', 'GB'];
       const i = Math.floor(Math.log(bytes) / Math.log(1024));
-      return `${parseFloat((bytes / Math.pow(1024, i)).toFixed(2))} ${sizes[i]}`;
+      return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
     };
 
     return response.status(200).json({
@@ -283,11 +362,13 @@ export default async function handler(request, response) {
         extension: fileType.ext,
         uploaded: new Date().toISOString(),
         downloadUrl: downloadUrl,
+        shortUrl: shortUrl,
         details: {
           platform: 'Google Gemini AI',
           model: 'nano-banana 1/7 scale',
           quality: 'HD',
-          hosting: 'qu.ax CDN'
+          hosting: 'qu.ax CDN',
+          expired: 'No Expiry Date'
         }
       }
     });
