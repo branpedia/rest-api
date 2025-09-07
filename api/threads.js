@@ -38,158 +38,201 @@ export default async function handler(request, response) {
       });
     }
 
-    let html;
-    let browser;
+    // Extract thread ID from URL
+    let threadId = url.match(/\/post\/([a-zA-Z0-9_-]+)/)?.[1];
+    if (!threadId) {
+      return response.status(400).json({ success: false, error: 'Gagal mengambil ID post dari URL' });
+    }
 
+    // Clean thread ID (remove query parameters if any)
+    threadId = threadId.split('?')[0];
+
+    console.log('Extracted thread ID:', threadId);
+
+    let apiData;
+    
     try {
-      // First try with cloudscraper
-      console.log('Trying with CloudScraper...');
-      html = await cloudscraper.get(url);
-    } catch (error) {
-      console.log('Cloudscraper failed, trying with Puppeteer...');
+      // First try to get data from dolphinradar API
+      console.log('Trying dolphinradar API...');
+      const apiUrl = `https://www.dolphinradar.com/api/threads/post_detail/${threadId}`;
       
-      // If cloudscraper fails, use Puppeteer as fallback
-      browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-      });
-      
-      const page = await browser.newPage();
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-      await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-      
-      // Wait for potential dynamic content
-      await page.waitForTimeout(3000);
-      
-      html = await page.content();
-      if (browser) await browser.close();
-    }
-
-    const dom = new JSDOM(html);
-    const document = dom.window.document;
-
-    // Extract Threads data
-    const usernameElem = document.querySelector('a[href*="/@"]') || 
-                         document.querySelector('span[dir="auto"]') ||
-                         document.querySelector('h1, h2, h3, h4, h5, h6');
-    const username = usernameElem ? usernameElem.textContent.trim() : 'Unknown';
-
-    // Try multiple selectors for caption
-    const captionSelectors = [
-      'div[dir="auto"]',
-      'span[data-testid="post-text"]',
-      'h1 + div, h2 + div, h3 + div, h4 + div, h5 + div, h6 + div',
-      '[data-ad-comet-preview="message"]',
-      '.x1yztbdb.x1n2onr6.xh8yej3.x1ja2u2z'
-    ];
-    
-    let caption = 'No caption available';
-    for (const selector of captionSelectors) {
-      const elem = document.querySelector(selector);
-      if (elem && elem.textContent.trim()) {
-        caption = elem.textContent.trim();
-        break;
-      }
-    }
-
-    // Extract media (images and videos)
-    const media = [];
-    
-    // Find images
-    const imageSelectors = [
-      'img[src*=".jpg"], img[src*=".jpeg"], img[src*=".png"], img[src*=".webp"]',
-      'img[data-src*=".jpg"], img[data-src*=".jpeg"], img[data-src*=".png"], img[data-src*=".webp"]',
-      'image[href*=".jpg"], image[href*=".jpeg"], image[href*=".png"], image[href*=".webp"]',
-      '[data-testid="post-image"] img'
-    ];
-    
-    for (const selector of imageSelectors) {
-      const images = document.querySelectorAll(selector);
-      for (const img of images) {
-        const src = img.src || img.getAttribute('data-src') || img.getAttribute('href') || img.getAttribute('xlink:href');
-        if (src && !src.startsWith('data:') && !media.some(m => m.url === src)) {
-          media.push({
-            type: 'image',
-            url: src,
-            format: src.split('.').pop() || 'jpg'
-          });
+      // Try with cloudscraper first
+      try {
+        const apiResponse = await cloudscraper.get(apiUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10)",
+            "Accept": "application/json",
+          }
+        });
+        apiData = JSON.parse(apiResponse);
+      } catch (apiError) {
+        console.log('Cloudscraper failed for API, trying direct fetch...');
+        
+        // If cloudscraper fails, try with Puppeteer
+        const browser = await puppeteer.launch({
+          headless: true,
+          args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+        
+        const page = await browser.newPage();
+        await page.setUserAgent('Mozilla/5.0 (Linux; Android 10)');
+        await page.setExtraHTTPHeaders({
+          'Accept': 'application/json'
+        });
+        
+        await page.goto(apiUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+        
+        // Get the API response
+        const content = await page.content();
+        const dom = new JSDOM(content);
+        const preElement = dom.window.document.querySelector('pre');
+        
+        if (preElement) {
+          apiData = JSON.parse(preElement.textContent);
         }
+        
+        await browser.close();
       }
-    }
-    
-    // Find videos
-    const videoSelectors = [
-      'video source',
-      'video',
-      '[data-testid="post-video"] source',
-      'meta[property="og:video"]'
-    ];
-    
-    for (const selector of videoSelectors) {
-      const videos = document.querySelectorAll(selector);
-      for (const video of videos) {
-        const src = video.src || video.getAttribute('content') || video.getAttribute('data-src');
-        if (src && !src.startsWith('data:') && !media.some(m => m.url === src)) {
-          media.push({
-            type: 'video',
-            url: src,
-            format: 'mp4'
-          });
-        }
-      }
-    }
-    
-    // Fallback: check meta tags for media
-    if (media.length === 0) {
-      const metaImages = document.querySelectorAll('meta[property="og:image"]');
-      for (const meta of metaImages) {
-        const content = meta.getAttribute('content');
-        if (content && !media.some(m => m.url === content)) {
-          media.push({
-            type: 'image',
-            url: content,
-            format: content.split('.').pop() || 'jpg'
-          });
-        }
-      }
-    }
 
-    // Try to get like count
-    const likeSelectors = [
-      '[aria-label*="like" i]',
-      '[aria-label*="suka" i]',
-      '[data-testid="like-count"]',
-      'span:contains("likes"), span:contains("suka")',
-      '.x1lliihq.x1plvlek.xryxfnj.x1n2onr6.x193iq5w.xeuugli.x1fj9vlw.x13faqbe.x1vvkbs.x1s928wv.xhkezso.x1gmr53x.x1cpjm7i.x1fgarty.x1943h6x.x1i0vuye.x1ms8i2q.x5n08af.x10wh9bi.x1wdrske.x8viiok.x18hxmgj'
-    ];
-    
-    let likeCount = 0;
-    for (const selector of likeSelectors) {
-      const elem = document.querySelector(selector);
-      if (elem) {
-        const likeText = elem.textContent.trim();
-        const match = likeText.match(/\d+/);
-        if (match) {
-          likeCount = parseInt(match[0]);
+      if (!apiData) {
+        throw new Error('Failed to get data from API');
+      }
+
+    } catch (apiError) {
+      console.log('API approach failed, falling back to web scraping...', apiError);
+      
+      // Fallback to web scraping if API fails
+      let html;
+      let browser;
+      
+      try {
+        // Try with cloudscraper
+        html = await cloudscraper.get(url);
+      } catch (scraperError) {
+        console.log('Cloudscraper failed, trying with Puppeteer...');
+        
+        // If cloudscraper fails, use Puppeteer as fallback
+        browser = await puppeteer.launch({
+          headless: true,
+          args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+        
+        const page = await browser.newPage();
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+        await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+        
+        // Wait for potential dynamic content
+        await page.waitForTimeout(3000);
+        
+        html = await page.content();
+        if (browser) await browser.close();
+      }
+
+      const dom = new JSDOM(html);
+      const document = dom.window.document;
+
+      // Extract basic info from page
+      const usernameElem = document.querySelector('a[href*="/@"]') || 
+                          document.querySelector('span[dir="auto"]') ||
+                          document.querySelector('h1, h2, h3, h4, h5, h6');
+      const username = usernameElem ? usernameElem.textContent.trim() : 'Unknown';
+
+      // Try multiple selectors for caption
+      const captionSelectors = [
+        'div[dir="auto"]',
+        'span[data-testid="post-text"]',
+        'h1 + div, h2 + div, h3 + div, h4 + div, h5 + div, h6 + div'
+      ];
+      
+      let caption = 'No caption available';
+      for (const selector of captionSelectors) {
+        const elem = document.querySelector(selector);
+        if (elem && elem.textContent.trim()) {
+          caption = elem.textContent.trim();
           break;
         }
       }
+
+      // Create fallback response
+      apiData = {
+        code: 0,
+        data: {
+          post_detail: {
+            caption_text: caption,
+            like_count: 0
+          },
+          user: {
+            username: username,
+            full_name: username,
+            follower_count: 0,
+            verified: false
+          }
+        }
+      };
     }
 
-    return response.status(200).json({
+    // Process the API response
+    const raw = apiData;
+    const data = raw?.data || raw;
+    const post = data?.post_detail || data;
+    const user = data?.user || {};
+
+    if (!post) {
+      throw new Error('Data post tidak ditemukan');
+    }
+
+    const media = post.media_list || [];
+    const totalImages = media.filter((m) => m.media_type === 1).length;
+    const totalVideos = media.filter((m) => m.media_type === 2).length;
+
+    // Process media for response
+    const processedMedia = [];
+    
+    for (const item of media) {
+      if (item.media_type === 1) { // Image
+        processedMedia.push({
+          type: 'image',
+          url: item.url,
+          format: 'jpg',
+          width: item.width,
+          height: item.height
+        });
+      } else if (item.media_type === 2) { // Video
+        processedMedia.push({
+          type: 'video',
+          url: item.url,
+          format: 'mp4',
+          width: item.width,
+          height: item.height
+        });
+      }
+    }
+
+    // Prepare response
+    const responseData = {
       success: true,
       data: {
         user: {
-          username: username,
+          full_name: user.full_name || "-",
+          username: user.username || "-",
+          verified: user.verified || user.is_verified || false,
+          follower_count: user.follower_count || 0,
+          avatar: user.avatar || null
         },
         post: {
-          caption: caption,
-          like_count: likeCount,
+          caption: post.caption_text || "-",
+          like_count: post.like_count || 0,
+          media_count: {
+            images: totalImages,
+            videos: totalVideos,
+            total: media.length
+          }
         },
-        media: media,
-        source: 'web-scraping'
+        media: processedMedia
       }
-    });
+    };
+
+    return response.status(200).json(responseData);
 
   } catch (error) {
     console.error('Error fetching Threads data:', error);
