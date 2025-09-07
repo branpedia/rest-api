@@ -1,4 +1,3 @@
-import axios from 'axios';
 import cloudscraper from 'cloudscraper';
 import { JSDOM } from 'jsdom';
 import puppeteer from 'puppeteer';
