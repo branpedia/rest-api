@@ -35,75 +35,46 @@ export default async function handler(request, response) {
       return response.status(400).json({ success: false, error: 'URL tidak valid. Pastikan URL berasal dari YouTube.' });
     }
 
-    let searchRes, convertRes;
+    // Extract video ID
     const videoId = extractVideoId(url);
+    if (!videoId) {
+      return response.status(400).json({ success: false, error: 'Tidak dapat mengambil ID video dari URL' });
+    }
+
+    let result;
     
     try {
-      // STEP 1: SEARCH
-      searchRes = await axios.post(
-        "https://ssvid.net/api/ajaxSearch/index",
-        new URLSearchParams({ query: url }).toString(),
-        {
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "X-Requested-With": "XMLHttpRequest",
-          },
-        }
-      );
-
-      if (!searchRes.data.data || searchRes.data.data.length === 0) {
-        throw new Error('Video tidak ditemukan');
-      }
-
-      const videoData = searchRes.data.data[0];
-      
-      // STEP 2: CONVERT
-      convertRes = await axios.post(
-        "https://ssvid.net/api/ajaxConvert/convert",
-        new URLSearchParams({
-          vid: videoData.vid,
-          k: videoData.key
-        }).toString(),
-        {
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "X-Requested-With": "XMLHttpRequest",
-          },
-        }
-      );
-
-      if (!convertRes.data || !convertRes.data.source) {
-        throw new Error('Konversi gagal');
-      }
-
-      return response.status(200).json({
-        success: true,
-        data: {
-          title: videoData.title,
-          duration: videoData.duration,
-          thumbnail: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
-          downloadUrl: convertRes.data.source,
-          quality: '128kbps',
-          size: convertRes.data.size || 'Unknown'
-        }
-      });
-
+      // First try with cloudscraper
+      result = await convertWithCloudscraper(videoId, url);
     } catch (error) {
-      console.error('Error fetching YouTube data:', error);
+      console.log('Cloudscraper failed, trying with Puppeteer...');
       
-      // Retry logic
-      if (retry < 2) {
-        // Wait for 1 second before retrying
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        return handler({ ...request, query: { ...request.query, retry: parseInt(retry) + 1 } }, response);
-      }
-      
-      // Fallback to Puppeteer if API fails
-      return await fallbackPuppeteerScraper(url, response);
+      // If cloudscraper fails, use Puppeteer as fallback
+      result = await convertWithPuppeteer(url);
     }
+
+    return response.status(200).json({
+      success: true,
+      data: {
+        title: result.title,
+        duration: result.duration,
+        thumbnail: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
+        downloadUrl: result.downloadUrl,
+        quality: result.quality || '128kbps',
+        size: result.size || 'Unknown'
+      }
+    });
 
   } catch (error) {
     console.error('Error in YouTube to MP3 converter:', error);
+    
+    // Retry logic
+    if (retry < 3) {
+      // Wait for 1 second before retrying
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return handler({ ...request, query: { ...request.query, retry: parseInt(retry) + 1 } }, response);
+    }
+    
     return response.status(500).json({ 
       success: false, 
       error: 'Gagal mengambil data dari YouTube. Pastikan URL valid dan coba lagi.' 
@@ -118,8 +89,75 @@ function extractVideoId(url) {
   return (match && match[7].length === 11) ? match[7] : null;
 }
 
-// Fallback method using Puppeteer
-async function fallbackPuppeteerScraper(url, response) {
+// Convert using Cloudscraper
+async function convertWithCloudscraper(videoId, url) {
+  try {
+    // Get video info first
+    const infoResponse = await cloudscraper.get(`https://ssvid.net/en?url=${encodeURIComponent(url)}`);
+    const infoDom = new JSDOM(infoResponse);
+    const infoDocument = infoDom.window.document;
+    
+    const title = infoDocument.querySelector('h2')?.textContent?.trim() || 'YouTube Video';
+    const duration = infoDocument.querySelector('.duration')?.textContent?.trim() || 'Unknown';
+    
+    // Perform conversion
+    const formData = {
+      query: url
+    };
+    
+    const searchResponse = await cloudscraper.post({
+      uri: 'https://ssvid.net/api/ajaxSearch/index',
+      formData: formData,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Requested-With': 'XMLHttpRequest',
+      }
+    });
+    
+    const searchData = JSON.parse(searchResponse);
+    
+    if (!searchData.data || searchData.data.length === 0) {
+      throw new Error('Video tidak ditemukan');
+    }
+    
+    const videoData = searchData.data[0];
+    
+    const convertFormData = {
+      vid: videoData.vid,
+      k: videoData.key
+    };
+    
+    const convertResponse = await cloudscraper.post({
+      uri: 'https://ssvid.net/api/ajaxConvert/convert',
+      formData: convertFormData,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Requested-With': 'XMLHttpRequest',
+      }
+    });
+    
+    const convertData = JSON.parse(convertResponse);
+    
+    if (!convertData || !convertData.source) {
+      throw new Error('Konversi gagal');
+    }
+    
+    return {
+      title: title,
+      duration: duration,
+      downloadUrl: convertData.source,
+      quality: '128kbps',
+      size: convertData.size || 'Unknown'
+    };
+    
+  } catch (error) {
+    console.error('Cloudscraper conversion error:', error);
+    throw error;
+  }
+}
+
+// Convert using Puppeteer
+async function convertWithPuppeteer(url) {
   let browser;
   try {
     browser = await puppeteer.launch({
@@ -131,10 +169,16 @@ async function fallbackPuppeteerScraper(url, response) {
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
     
     // Navigate to a YouTube downloader site
-    await page.goto(`https://ytmp3.cc/en13/?url=${encodeURIComponent(url)}`, { 
+    await page.goto(`https://ytmp3.cc/en13/`, { 
       waitUntil: 'networkidle2',
       timeout: 30000
     });
+    
+    // Input the URL
+    await page.type('#input', url);
+    
+    // Click the convert button
+    await page.click('#submit');
     
     // Wait for conversion to complete
     await page.waitForSelector('#download', { timeout: 60000 });
@@ -145,20 +189,16 @@ async function fallbackPuppeteerScraper(url, response) {
     
     await browser.close();
     
-    return response.status(200).json({
-      success: true,
-      data: {
-        title: title,
-        downloadUrl: downloadUrl,
-        quality: '128kbps',
-        size: 'Unknown',
-        source: 'fallback'
-      }
-    });
+    return {
+      title: title,
+      downloadUrl: downloadUrl,
+      quality: '128kbps',
+      size: 'Unknown'
+    };
     
   } catch (error) {
     if (browser) await browser.close();
-    console.error('Fallback method also failed:', error);
+    console.error('Puppeteer conversion error:', error);
     throw error;
   }
 }
