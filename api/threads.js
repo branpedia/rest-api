@@ -139,7 +139,7 @@ export default async function handler(request, response) {
 
       // Try multiple selectors for caption
       const captionSelectors = [
-        'div[dir="auto"]',
+        'div[dir="auto']",
         'span[data-testid="post-text"]',
         'h1 + div, h2 + div, h3 + div, h4 + div, h5 + div, h6 + div'
       ];
@@ -185,22 +185,38 @@ export default async function handler(request, response) {
     const totalImages = media.filter((m) => m.media_type === 1).length;
     const totalVideos = media.filter((m) => m.media_type === 2).length;
 
-    // Process media for response
+    // Process media for response - ensure correct file extensions
     const processedMedia = [];
     
     for (const item of media) {
       if (item.media_type === 1) { // Image
+        // Ensure URL has .jpg extension
+        let mediaUrl = item.url;
+        if (!mediaUrl.includes('.jpg') && !mediaUrl.includes('.jpeg') && 
+            !mediaUrl.includes('.png') && !mediaUrl.includes('.webp')) {
+          // Remove any existing query parameters and add .jpg
+          mediaUrl = mediaUrl.split('?')[0] + '.jpg';
+        }
+        
         processedMedia.push({
           type: 'image',
-          url: item.url,
+          url: mediaUrl,
           format: 'jpg',
           width: item.width,
           height: item.height
         });
       } else if (item.media_type === 2) { // Video
+        // Ensure URL has .mp4 extension
+        let mediaUrl = item.url;
+        if (!mediaUrl.includes('.mp4') && !mediaUrl.includes('.mov') && 
+            !mediaUrl.includes('.avi') && !mediaUrl.includes('.webm')) {
+          // Remove any existing query parameters and add .mp4
+          mediaUrl = mediaUrl.split('?')[0] + '.mp4';
+        }
+        
         processedMedia.push({
           type: 'video',
-          url: item.url,
+          url: mediaUrl,
           format: 'mp4',
           width: item.width,
           height: item.height
