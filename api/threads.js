@@ -1,6 +1,8 @@
 import cloudscraper from 'cloudscraper';
 import { JSDOM } from 'jsdom';
 import puppeteer from 'puppeteer';
+import sharp from 'sharp';
+import axios from 'axios';
 
 export default async function handler(request, response) {
   // Set CORS headers
@@ -23,39 +25,32 @@ export default async function handler(request, response) {
     return response.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const { url, retry = 0 } = request.query;
+  const { url, retry = 0, convert = 'true' } = request.query;
 
   if (!url) {
     return response.status(400).json({ success: false, error: 'Parameter URL diperlukan' });
   }
 
   try {
-    // Validate Threads URL (accept both threads.net and threads.com)
+    // Validate Threads URL
     if ((!url.includes('threads.net') && !url.includes('threads.com')) || !url.includes('/post/')) {
       return response.status(400).json({ 
         success: false, 
-        error: 'URL tidak valid. Pastikan URL berasal dari Threads (threads.net atau threads.com).' 
+        error: 'URL tidak valid. Pastikan URL berasal dari Threads.' 
       });
     }
 
-    // Extract thread ID from URL
     let threadId = url.match(/\/post\/([a-zA-Z0-9_-]+)/)?.[1];
     if (!threadId) {
       return response.status(400).json({ success: false, error: 'Gagal mengambil ID post dari URL' });
     }
 
-    // Clean thread ID (remove query parameters if any)
     threadId = threadId.split('?')[0];
 
-    console.log('Extracted thread ID:', threadId);
-
-    // Use dolphinradar API directly (more reliable)
+    // Use dolphinradar API
     let apiData;
     try {
-      console.log('Trying dolphinradar API...');
       const apiUrl = `https://www.dolphinradar.com/api/threads/post_detail/${threadId}`;
-      
-      // Use cloudscraper for the API request
       const apiResponse = await cloudscraper.get(apiUrl, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Linux; Android 10)",
@@ -63,9 +58,7 @@ export default async function handler(request, response) {
         },
         timeout: 15000
       });
-      
       apiData = JSON.parse(apiResponse);
-      
     } catch (apiError) {
       console.log('API request failed:', apiError.message);
       throw new Error('Tidak dapat mengakses API Threads');
@@ -77,34 +70,46 @@ export default async function handler(request, response) {
     const post = data?.post_detail || data;
     const user = data?.user || {};
 
-    if (!post) {
-      throw new Error('Data post tidak ditemukan');
-    }
+    if (!post) throw new Error('Data post tidak ditemukan');
 
     const media = post.media_list || [];
     const totalImages = media.filter((m) => m.media_type === 1).length;
     const totalVideos = media.filter((m) => m.media_type === 2).length;
 
-    // Process media for response - convert WebP to JPG when there are videos
+    // Process media
     const processedMedia = [];
     const hasVideos = totalVideos > 0;
+    const shouldConvert = convert === 'true';
     
     for (const item of media) {
       if (item.media_type === 1) { // Image
         let mediaUrl = item.url || '';
         let format = 'jpg';
+        let jpgConversionUrl = null;
         
-        // Determine format from URL
+        // Determine format and handle WebP conversion
         if (mediaUrl.includes('.jpg') || mediaUrl.includes('.jpeg')) {
           format = 'jpg';
         } else if (mediaUrl.includes('.png')) {
           format = 'png';
         } else if (mediaUrl.includes('.webp')) {
           format = 'webp';
-          // Convert WebP to JPG if there are videos in the post
-          if (hasVideos) {
-            mediaUrl = mediaUrl.replace('.webp', '.jpg');
-            format = 'jpg';
+          
+          // Cari versi JPG dari version_medias jika ada
+          if (item.version_medias && item.version_medias.length > 0) {
+            const jpgVersion = item.version_medias.find(v => 
+              v.url && (v.url.includes('.jpg') || v.url.includes('.jpeg'))
+            );
+            
+            if (jpgVersion && jpgVersion.url) {
+              mediaUrl = jpgVersion.url;
+              format = 'jpg';
+            } else if (shouldConvert && hasVideos) {
+              // Jika harus convert dan tidak ada versi JPG, berikan endpoint konversi
+              jpgConversionUrl = `/api/convert?url=${encodeURIComponent(mediaUrl)}&format=jpg`;
+            }
+          } else if (shouldConvert && hasVideos) {
+            jpgConversionUrl = `/api/convert?url=${encodeURIComponent(mediaUrl)}&format=jpg`;
           }
         }
         
@@ -113,23 +118,19 @@ export default async function handler(request, response) {
           url: mediaUrl,
           format: format,
           width: item.width || 0,
-          height: item.height || 0
+          height: item.height || 0,
+          jpg_conversion_url: jpgConversionUrl,
+          needs_conversion: format === 'webp' && hasVideos && shouldConvert
         });
         
       } else if (item.media_type === 2) { // Video
         let mediaUrl = item.url || '';
         let format = 'mp4';
         
-        // Determine format from URL or use default
-        if (mediaUrl.includes('.mp4')) {
-          format = 'mp4';
-        } else if (mediaUrl.includes('.mov')) {
-          format = 'mov';
-        } else if (mediaUrl.includes('.avi')) {
-          format = 'avi';
-        } else if (mediaUrl.includes('.webm')) {
-          format = 'webm';
-        }
+        if (mediaUrl.includes('.mp4')) format = 'mp4';
+        else if (mediaUrl.includes('.mov')) format = 'mov';
+        else if (mediaUrl.includes('.avi')) format = 'avi';
+        else if (mediaUrl.includes('.webm')) format = 'webm';
         
         processedMedia.push({
           type: 'video',
@@ -162,9 +163,14 @@ export default async function handler(request, response) {
             images: totalImages,
             videos: totalVideos,
             total: media.length
-          }
+          },
+          has_mixed_media: hasVideos && totalImages > 0
         },
-        media: processedMedia
+        media: processedMedia,
+        conversion: {
+          available: shouldConvert,
+          note: "Gunakan parameter convert=false untuk menonaktifkan konversi otomatis"
+        }
       }
     };
 
@@ -173,17 +179,52 @@ export default async function handler(request, response) {
   } catch (error) {
     console.error('Error fetching Threads data:', error);
     
-    // Retry logic
     if (retry < 2) {
-      console.log(`Retrying... (${parseInt(retry) + 1}/2)`);
       await new Promise(resolve => setTimeout(resolve, 2000));
       return handler({ ...request, query: { ...request.query, retry: parseInt(retry) + 1 } }, response);
     }
     
     return response.status(500).json({ 
       success: false, 
-      error: 'Gagal mengambil data dari Threads. Pastikan URL valid dan coba lagi.',
+      error: 'Gagal mengambil data dari Threads.',
       details: error.message 
     });
+  }
+}
+
+// Endpoint terpisah untuk konversi WebP ke JPG
+export async function convertHandler(req, res) {
+  const { url, format = 'jpg' } = req.query;
+  
+  if (!url) {
+    return res.status(400).json({ error: 'URL parameter required' });
+  }
+
+  try {
+    // Download image
+    const response = await axios.get(url, {
+      responseType: 'arraybuffer',
+      timeout: 15000,
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    
+    let buffer = Buffer.from(response.data);
+    
+    // Convert WebP to desired format
+    if (format === 'jpg' || format === 'jpeg') {
+      buffer = await sharp(buffer).jpeg().toBuffer();
+    } else if (format === 'png') {
+      buffer = await sharp(buffer).png().toBuffer();
+    }
+    
+    // Set headers and send converted image
+    res.setHeader('Content-Type', `image/${format}`);
+    res.setHeader('Content-Length', buffer.length);
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache 1 day
+    res.send(buffer);
+    
+  } catch (error) {
+    console.error('Conversion error:', error);
+    res.status(500).json({ error: 'Conversion failed', details: error.message });
   }
 }
