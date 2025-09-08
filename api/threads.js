@@ -85,21 +85,27 @@ export default async function handler(request, response) {
     const totalImages = media.filter((m) => m.media_type === 1).length;
     const totalVideos = media.filter((m) => m.media_type === 2).length;
 
-    // Process media for response - ensure correct file extensions
+    // Process media for response - convert WebP to JPG when there are videos
     const processedMedia = [];
+    const hasVideos = totalVideos > 0;
     
     for (const item of media) {
       if (item.media_type === 1) { // Image
         let mediaUrl = item.url || '';
         let format = 'jpg';
         
-        // Determine format from URL or use default
+        // Determine format from URL
         if (mediaUrl.includes('.jpg') || mediaUrl.includes('.jpeg')) {
           format = 'jpg';
         } else if (mediaUrl.includes('.png')) {
           format = 'png';
         } else if (mediaUrl.includes('.webp')) {
           format = 'webp';
+          // Convert WebP to JPG if there are videos in the post
+          if (hasVideos) {
+            mediaUrl = mediaUrl.replace('.webp', '.jpg');
+            format = 'jpg';
+          }
         }
         
         processedMedia.push({
