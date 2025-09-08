@@ -5,100 +5,6 @@ import puppeteer from 'puppeteer';
 // Konstanta untuk base URL
 const VIRTUSTIM_BASE_URL = 'https://virtusim.com/api/v2/json.php';
 
-export default async function handler(request, response) {
-  // Set CORS headers
-  response.setHeader('Access-Control-Allow-Credentials', true);
-  response.setHeader('Access-Control-Allow-Origin', '*');
-  response.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  response.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
-
-  // Handle OPTIONS request for CORS
-  if (request.method === 'OPTIONS') {
-    response.status(200).end();
-    return;
-  }
-
-  // Only allow GET requests
-  if (request.method !== 'GET') {
-    return response.status(405).json({ success: false, error: 'Method not allowed' });
-  }
-
-  const { action, api_key, retry = 0, ...params } = request.query;
-
-  if (!api_key) {
-    return response.status(400).json({ success: false, error: 'Parameter api_key diperlukan' });
-  }
-
-  if (!action) {
-    return response.status(400).json({ 
-      success: false, 
-      error: 'Parameter action diperlukan. Pilihan: balance, balance_logs, recent_activity, services, list_country, list_operator, active_order, order, reactive_order, status, set_status, order_history, detail_order, deposit' 
-    });
-  }
-
-  try {
-    // Validasi parameter untuk setiap action
-    let validationError = validateParams(action, params);
-    if (validationError) {
-      return response.status(400).json({ success: false, error: validationError });
-    }
-
-    // Lakukan request ke Virtustim API
-    const result = await makeVirtustimRequest(api_key, action, params, parseInt(retry));
-    
-    return response.status(200).json(result);
-  } catch (error) {
-    console.error('Error in Virtustim API:', error);
-    
-    // Retry logic
-    if (retry < 3) {
-      // Wait for 1 second before retrying
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      return handler({ 
-        ...request, 
-        query: { ...request.query, retry: parseInt(retry) + 1 } 
-      }, response);
-    }
-    
-    return response.status(500).json({ 
-      success: false, 
-      error: error.message || 'Gagal mengambil data dari Virtustim. Pastikan API key valid dan coba lagi.' 
-    });
-  }
-}
-
-// Fungsi validasi parameter
-function validateParams(action, params) {
-  switch (action) {
-    case 'order':
-      if (!params.service) return 'Parameter service diperlukan untuk membuat order';
-      break;
-    case 'reactive_order':
-      if (!params.id) return 'Parameter id diperlukan untuk reactive order';
-      break;
-    case 'status':
-      if (!params.id) return 'Parameter id diperlukan untuk mengecek status';
-      break;
-    case 'set_status':
-      if (!params.id || !params.status) {
-        return 'Parameter id dan status diperlukan untuk mengubah status. Status: 1=Ready, 2=Cancel, 3=Resend, 4=Completed';
-      }
-      break;
-    case 'detail_order':
-      if (!params.id) return 'Parameter id diperlukan untuk detail order';
-      break;
-    case 'deposit':
-      if (!params.method || !params.amount) {
-        return 'Parameter method dan amount diperlukan untuk deposit. Method: 20=QRIS, 22=USDCBSC, 23=USDTBSC, 24=BTC, 25=ETH, 26=SOLANA';
-      }
-      break;
-  }
-  return null;
-}
-
 // Fungsi untuk melakukan request ke API Virtustim dengan cloudscraper dan puppeteer fallback
 async function makeVirtustimRequest(apiKey, action, params = {}, retry = 0) {
   const urlParams = new URLSearchParams({
@@ -109,6 +15,7 @@ async function makeVirtustimRequest(apiKey, action, params = {}, retry = 0) {
 
   const url = `${VIRTUSTIM_BASE_URL}?${urlParams.toString()}`;
   
+  let html;
   let browser;
   let finalResponse;
 
@@ -151,7 +58,7 @@ async function makeVirtustimRequest(apiKey, action, params = {}, retry = 0) {
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Dapatkan HTML dari halaman
-      const html = await page.content();
+      html = await page.content();
       finalResponse = html;
       
       await browser.close();
@@ -208,3 +115,21 @@ async function makeVirtustimRequest(apiKey, action, params = {}, retry = 0) {
     }
   }
 }
+
+// Export fungsi utama untuk 3 API
+export async function handleBalance(api_key, params = {}, retry = 0) {
+  return await makeVirtustimRequest(api_key, 'balance', params, retry);
+}
+
+export async function handleServices(api_key, params = {}, retry = 0) {
+  return await makeVirtustimRequest(api_key, 'services', params, retry);
+}
+
+export async function handleOrder(api_key, params = {}, retry = 0) {
+  if (!params.service) {
+    throw new Error('Parameter service diperlukan untuk membuat order');
+  }
+  return await makeVirtustimRequest(api_key, 'order', params, retry);
+}
+
+export default makeVirtustimRequest;
