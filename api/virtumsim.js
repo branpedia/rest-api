@@ -33,90 +33,22 @@ export default async function handler(request, response) {
   }
 
   if (!action) {
-    return response.status(400).json({ success: false, error: 'Parameter action diperlukan' });
+    return response.status(400).json({ 
+      success: false, 
+      error: 'Parameter action diperlukan. Pilihan: balance, balance_logs, recent_activity, services, list_country, list_operator, active_order, order, reactive_order, status, set_status, order_history, detail_order, deposit' 
+    });
   }
 
   try {
-    let result;
-    
-    // Semua 13 endpoint yang diminta
-    switch (action) {
-      case 'balance':
-        result = await makeVirtustimRequest(api_key, 'balance', {}, retry);
-        break;
-      case 'balance_logs':
-        result = await makeVirtustimRequest(api_key, 'balance_logs', {}, retry);
-        break;
-      case 'recent_activity':
-        result = await makeVirtustimRequest(api_key, 'recent_activity', {}, retry);
-        break;
-      case 'services':
-        result = await makeVirtustimRequest(api_key, 'services', params, retry);
-        break;
-      case 'list_country':
-        result = await makeVirtustimRequest(api_key, 'list_country', {}, retry);
-        break;
-      case 'list_operator':
-        result = await makeVirtustimRequest(api_key, 'list_operator', params, retry);
-        break;
-      case 'active_order':
-        result = await makeVirtustimRequest(api_key, 'active_order', {}, retry);
-        break;
-      case 'order':
-        // Validasi parameter untuk order
-        if (!params.service) {
-          return response.status(400).json({ success: false, error: 'Parameter service diperlukan untuk membuat order' });
-        }
-        result = await makeVirtustimRequest(api_key, 'order', params, retry);
-        break;
-      case 'reactive_order':
-        // Validasi parameter untuk reactive order
-        if (!params.id) {
-          return response.status(400).json({ success: false, error: 'Parameter id diperlukan untuk reactive order' });
-        }
-        result = await makeVirtustimRequest(api_key, 'reactive_order', params, retry);
-        break;
-      case 'status':
-        // Validasi parameter untuk status
-        if (!params.id) {
-          return response.status(400).json({ success: false, error: 'Parameter id diperlukan untuk mengecek status' });
-        }
-        result = await makeVirtustimRequest(api_key, 'status', params, retry);
-        break;
-      case 'set_status':
-        // Validasi parameter untuk set_status
-        if (!params.id || !params.status) {
-          return response.status(400).json({ 
-            success: false, 
-            error: 'Parameter id dan status diperlukan untuk mengubah status. Status: 1=Ready, 2=Cancel, 3=Resend, 4=Completed' 
-          });
-        }
-        result = await makeVirtustimRequest(api_key, 'set_status', params, retry);
-        break;
-      case 'order_history':
-        result = await makeVirtustimRequest(api_key, 'order_history', {}, retry);
-        break;
-      case 'detail_order':
-        // Validasi parameter untuk detail order
-        if (!params.id) {
-          return response.status(400).json({ success: false, error: 'Parameter id diperlukan untuk detail order' });
-        }
-        result = await makeVirtustimRequest(api_key, 'detail_order', params, retry);
-        break;
-      case 'deposit':
-        // Validasi parameter untuk deposit
-        if (!params.method || !params.amount) {
-          return response.status(400).json({ 
-            success: false, 
-            error: 'Parameter method dan amount diperlukan untuk deposit. Method: 20=QRIS, 22=USDCBSC, 23=USDTBSC, 24=BTC, 25=ETH, 26=SOLANA' 
-          });
-        }
-        result = await makeVirtustimRequest(api_key, 'deposit', params, retry);
-        break;
-      default:
-        return response.status(400).json({ success: false, error: 'Action tidak valid. Action yang tersedia: balance, balance_logs, recent_activity, services, list_country, list_operator, active_order, order, reactive_order, status, set_status, order_history, detail_order, deposit' });
+    // Validasi parameter untuk setiap action
+    let validationError = validateParams(action, params);
+    if (validationError) {
+      return response.status(400).json({ success: false, error: validationError });
     }
 
+    // Lakukan request ke Virtustim API
+    const result = await makeVirtustimRequest(api_key, action, params, parseInt(retry));
+    
     return response.status(200).json(result);
   } catch (error) {
     console.error('Error in Virtustim API:', error);
@@ -138,6 +70,35 @@ export default async function handler(request, response) {
   }
 }
 
+// Fungsi validasi parameter
+function validateParams(action, params) {
+  switch (action) {
+    case 'order':
+      if (!params.service) return 'Parameter service diperlukan untuk membuat order';
+      break;
+    case 'reactive_order':
+      if (!params.id) return 'Parameter id diperlukan untuk reactive order';
+      break;
+    case 'status':
+      if (!params.id) return 'Parameter id diperlukan untuk mengecek status';
+      break;
+    case 'set_status':
+      if (!params.id || !params.status) {
+        return 'Parameter id dan status diperlukan untuk mengubah status. Status: 1=Ready, 2=Cancel, 3=Resend, 4=Completed';
+      }
+      break;
+    case 'detail_order':
+      if (!params.id) return 'Parameter id diperlukan untuk detail order';
+      break;
+    case 'deposit':
+      if (!params.method || !params.amount) {
+        return 'Parameter method dan amount diperlukan untuk deposit. Method: 20=QRIS, 22=USDCBSC, 23=USDTBSC, 24=BTC, 25=ETH, 26=SOLANA';
+      }
+      break;
+  }
+  return null;
+}
+
 // Fungsi untuk melakukan request ke API Virtustim dengan cloudscraper dan puppeteer fallback
 async function makeVirtustimRequest(apiKey, action, params = {}, retry = 0) {
   const urlParams = new URLSearchParams({
@@ -148,7 +109,6 @@ async function makeVirtustimRequest(apiKey, action, params = {}, retry = 0) {
 
   const url = `${VIRTUSTIM_BASE_URL}?${urlParams.toString()}`;
   
-  let html;
   let browser;
   let finalResponse;
 
@@ -191,7 +151,7 @@ async function makeVirtustimRequest(apiKey, action, params = {}, retry = 0) {
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Dapatkan HTML dari halaman
-      html = await page.content();
+      const html = await page.content();
       finalResponse = html;
       
       await browser.close();
