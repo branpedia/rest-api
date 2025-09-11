@@ -114,6 +114,43 @@ const s = {
     }
 }
 
+// Fungsi untuk memperbaiki URL yang double-encoded
+function fixDoubleEncodedUrl(url) {
+    try {
+        // Decode URL sekali untuk menghilangkan double encoding
+        let fixedUrl = decodeURIComponent(url);
+        
+        // Encode kembali hanya bagian yang perlu diencode
+        const urlObj = new URL(fixedUrl);
+        const baseUrl = `${urlObj.origin}${urlObj.pathname}`;
+        const searchParams = new URLSearchParams();
+        
+        // Process each parameter
+        for (let [key, value] of urlObj.searchParams.entries()) {
+            // Untuk parameter fname, kita ingin menghilangkan encoding berlebihan
+            if (key === 'fname') {
+                // Decode value terlebih dahulu
+                let decodedValue = decodeURIComponent(value);
+                // Encode kembali dengan benar
+                searchParams.set(key, encodeURIComponent(decodedValue));
+            } else {
+                searchParams.set(key, value);
+            }
+        }
+        
+        return `${baseUrl}?${searchParams.toString()}`;
+    } catch (error) {
+        console.log('Error fixing URL, returning original:', error);
+        return url;
+    }
+}
+
+// Fungsi alternatif yang lebih sederhana
+function simpleUrlFix(url) {
+    // Ganti %2520 dengan %20 (double encoding -> single encoding)
+    return url.replace(/%2520/g, '%20');
+}
+
 export default async function handler(request, response) {
     // Set CORS headers
     response.setHeader('Access-Control-Allow-Credentials', true);
@@ -150,51 +187,35 @@ export default async function handler(request, response) {
         // Download track data
         const dl = await s.download(url);
 
+        // Perbaiki URL download yang double-encoded
+        let fixedDownloadUrl = simpleUrlFix(dl.dlink);
+        
         // Get file size information
         let fileSize = 'Unknown';
-        let encodedDownloadUrl = dl.dlink;
         
         try {
-            // Encode URL yang mengandung spasi
-            if (dl.dlink.includes(' ')) {
-                // Pisahkan base URL dan parameter
-                const urlObj = new URL(dl.dlink);
-                const baseUrl = `${urlObj.origin}${urlObj.pathname}`;
-                const searchParams = new URLSearchParams(urlObj.search);
-                
-                // Encode nilai parameter yang mengandung spasi
-                for (let [key, value] of searchParams.entries()) {
-                    if (value.includes(' ')) {
-                        searchParams.set(key, encodeURIComponent(value));
-                    }
+            const headResponse = await fetch(fixedDownloadUrl, { method: 'HEAD' });
+            if (headResponse.ok) {
+                const contentLength = headResponse.headers.get('content-length');
+                if (contentLength) {
+                    const sizeInMB = parseInt(contentLength) / (1024 * 1024);
+                    fileSize = `${sizeInMB.toFixed(2)} MB`;
                 }
-                
-                encodedDownloadUrl = `${baseUrl}?${searchParams.toString()}`;
-            }
-
-            const headResponse = await fetch(encodedDownloadUrl, { method: 'HEAD' });
-            const contentLength = headResponse.headers.get('content-length');
-            if (contentLength) {
-                const sizeInMB = parseInt(contentLength) / (1024 * 1024);
-                fileSize = `${sizeInMB.toFixed(2)} MB`;
+            } else {
+                // Jika HEAD gagal, coba dengan GET tapi batasi data yang diambil
+                console.log('HEAD failed, trying limited GET for file size...');
+                const getResponse = await fetch(fixedDownloadUrl, { 
+                    method: 'GET',
+                    headers: { 'Range': 'bytes=0-1000' } // Hanya ambil sedikit data
+                });
+                const contentLength = getResponse.headers.get('content-length');
+                if (contentLength && getResponse.ok) {
+                    const sizeInMB = parseInt(contentLength) / (1024 * 1024);
+                    fileSize = `${sizeInMB.toFixed(2)} MB (estimated)`;
+                }
             }
         } catch (sizeError) {
             console.log('Could not determine file size:', sizeError);
-            
-            // Fallback: coba URL asli jika encoded URL gagal
-            if (encodedDownloadUrl !== dl.dlink) {
-                try {
-                    const headResponseFallback = await fetch(dl.dlink, { method: 'HEAD' });
-                    const contentLength = headResponseFallback.headers.get('content-length');
-                    if (contentLength) {
-                        const sizeInMB = parseInt(contentLength) / (1024 * 1024);
-                        fileSize = `${sizeInMB.toFixed(2)} MB`;
-                    }
-                    encodedDownloadUrl = dl.dlink; // Kembali ke URL asli
-                } catch (fallbackError) {
-                    console.log('Fallback also failed:', fallbackError);
-                }
-            }
         }
 
         return response.status(200).json({
@@ -208,8 +229,9 @@ export default async function handler(request, response) {
                 size: fileSize,
                 extension: 'm4a',
                 coverUrl: dl.img,
-                downloadUrl: encodedDownloadUrl,
-                fileName: `${dl.song_name.replace(/ /g, '_')}-${dl.artist.replace(/ /g, '_')}.m4a`
+                downloadUrl: fixedDownloadUrl,
+                fileName: `${dl.song_name.replace(/ /g, '_')}-${dl.artist.replace(/ /g, '_')}.m4a`,
+                originalUrl: dl.dlink // Untuk debugging
             }
         });
 
