@@ -45,41 +45,41 @@ export default async function handler(request, response) {
     let result;
     let errorMessages = [];
     
-    // Coba semua server secara berurutan
+    // Coba semua server secara berurutan (dimulai dari server 2)
     try {
-      console.log('Mencoba server 1 (spotisongdownloader.to)...');
-      result = await tryServer1(url);
-      console.log('Server 1 berhasil');
+      console.log('Mencoba server 2 (spotifydownloader.pro)...');
+      result = await tryServer2(url);
+      console.log('Server 2 berhasil');
     } catch (error) {
-      errorMessages.push(`Server 1: ${error.message}`);
-      console.log('Server 1 gagal:', error.message);
+      errorMessages.push(`Server 2: ${error.message}`);
+      console.log('Server 2 gagal:', error.message);
       
-      // Coba server 2
+      // Coba server 3
       try {
-        console.log('Mencoba server 2 (spotifydownloader.pro)...');
-        result = await tryServer2(url);
-        console.log('Server 2 berhasil');
+        console.log('Mencoba server 3 (spotifymate.com)...');
+        result = await tryServer3(url);
+        console.log('Server 3 berhasil');
       } catch (error2) {
-        errorMessages.push(`Server 2: ${error2.message}`);
-        console.log('Server 2 gagal:', error2.message);
+        errorMessages.push(`Server 3: ${error2.message}`);
+        console.log('Server 3 gagal:', error2.message);
         
-        // Coba server 3
+        // Coba server 4 sebagai fallback terakhir
         try {
-          console.log('Mencoba server 3 (spotifymate.com)...');
-          result = await tryServer3(url);
-          console.log('Server 3 berhasil');
+          console.log('Mencoba server 4 (spotify-downloader.alien...)...');
+          result = await tryServer4(url);
+          console.log('Server 4 berhasil');
         } catch (error3) {
-          errorMessages.push(`Server 3: ${error3.message}`);
-          console.log('Server 3 gagal:', error3.message);
+          errorMessages.push(`Server 4: ${error3.message}`);
+          console.log('Server 4 gagal:', error3.message);
           
-          // Coba server 4 sebagai fallback terakhir
+          // Coba server 5 alternatif tambahan
           try {
-            console.log('Mencoba server 4 (spotify-downloader.alien...)...');
-            result = await tryServer4(url);
-            console.log('Server 4 berhasil');
+            console.log('Mencoba server 5 (spotify-downloader.vercel.app)...');
+            result = await tryServer5(url);
+            console.log('Server 5 berhasil');
           } catch (error4) {
-            errorMessages.push(`Server 4: ${error4.message}`);
-            console.log('Server 4 gagal:', error4.message);
+            errorMessages.push(`Server 5: ${error4.message}`);
+            console.log('Server 5 gagal:', error4.message);
             throw new Error(`Semua server gagal: ${errorMessages.join('; ')}`);
           }
         }
@@ -105,92 +105,6 @@ export default async function handler(request, response) {
       success: false, 
       error: 'Gagal mengambil data dari Spotify. Pastikan URL valid dan coba lagi.' 
     });
-  }
-}
-
-// Server 1 implementation - spotisongdownloader.to
-async function tryServer1(spotifyUrl) {
-  try {
-    const baseUrl = 'https://spotisongdownloader.to';
-    
-    // Get initial page
-    const initialHtml = await cloudscraper.get(baseUrl);
-    
-    // Extract cookies
-    let cookieString = '';
-    if (initialHtml.request && initialHtml.request.headers && initialHtml.request.headers.cookie) {
-      cookieString = initialHtml.request.headers.cookie;
-    }
-    
-    // Prepare headers
-    const headers = {
-      'Referer': baseUrl,
-      'Cookie': cookieString,
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'X-Requested-With': 'XMLHttpRequest'
-    };
-    
-    // Get track info
-    const trackInfoUrl = `${baseUrl}/api/composer/spotify/xsingle_track.php?url=${encodeURIComponent(spotifyUrl)}`;
-    const trackInfoResponse = await cloudscraper.get({
-      uri: trackInfoUrl,
-      headers: headers,
-      json: true
-    });
-    
-    if (!trackInfoResponse || !trackInfoResponse.song_name) {
-      throw new Error('Invalid response from server');
-    }
-    
-    // Prepare payload
-    const payload = [
-      trackInfoResponse.song_name,
-      trackInfoResponse.duration,
-      trackInfoResponse.img,
-      trackInfoResponse.artist,
-      trackInfoResponse.url,
-      trackInfoResponse.album_name,
-      trackInfoResponse.released
-    ];
-    
-    // Send payload
-    await cloudscraper.post({
-      uri: `${baseUrl}/track.php`,
-      headers: headers,
-      form: { data: JSON.stringify(payload) }
-    });
-    
-    // Get download URL
-    const downloadResponse = await cloudscraper.post({
-      uri: `${baseUrl}/api/composer/spotify/ssdw23456ytrfds.php`,
-      headers: headers,
-      form: {
-        song_name: trackInfoResponse.song_name || '',
-        artist_name: trackInfoResponse.artist || '',
-        url: spotifyUrl,
-        zip_download: 'false',
-        quality: 'm4a'
-      },
-      json: true
-    });
-    
-    if (!downloadResponse || !downloadResponse.dlink) {
-      throw new Error('No download link received');
-    }
-    
-    return {
-      song_name: trackInfoResponse.song_name,
-      artist: trackInfoResponse.artist,
-      duration: trackInfoResponse.duration,
-      img: trackInfoResponse.img,
-      album_name: trackInfoResponse.album_name,
-      released: trackInfoResponse.released,
-      downloadUrl: downloadResponse.dlink,
-      source: 'server_1'
-    };
-    
-  } catch (error) {
-    throw new Error(error.message);
   }
 }
 
@@ -342,7 +256,7 @@ async function tryServer3(spotifyUrl) {
   }
 }
 
-// Server 4 implementation - alternatif terakhir
+// Server 4 implementation - alternatif
 async function tryServer4(spotifyUrl) {
   let browser;
   try {
@@ -355,7 +269,7 @@ async function tryServer4(spotifyUrl) {
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     
     // Navigate to downloader site
-    await page.goto('https://spotify-downloader.alien.slayer.workers.dev/', { 
+    await page.goto('https://spotify-downloader.vercel.app/', { 
       waitUntil: 'domcontentloaded',
       timeout: 30000
     });
@@ -407,6 +321,35 @@ async function tryServer4(spotifyUrl) {
     
   } catch (error) {
     if (browser) await browser.close();
+    throw new Error(error.message);
+  }
+}
+
+// Server 5 implementation - alternatif tambahan
+async function tryServer5(spotifyUrl) {
+  try {
+    // Gunakan API langsung sebagai alternatif
+    const apiUrl = `https://api.spotify-downloader.com/`;
+    const response = await cloudscraper.get({
+      uri: `${apiUrl}download`,
+      qs: { url: spotifyUrl },
+      json: true,
+      timeout: 30000
+    });
+    
+    if (!response || !response.downloadUrl) {
+      throw new Error('No download link received from API');
+    }
+    
+    return {
+      song_name: response.title || 'Unknown Title',
+      artist: response.artist || 'Unknown Artist',
+      img: response.thumbnail || '',
+      downloadUrl: response.downloadUrl,
+      source: 'server_5'
+    };
+    
+  } catch (error) {
     throw new Error(error.message);
   }
 }
