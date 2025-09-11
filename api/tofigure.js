@@ -3,7 +3,25 @@ import puppeteer from 'puppeteer'
 import { JSDOM } from 'jsdom'
 
 const BASE_URL = 'https://ai-apps.codergautam.dev'
-const PROMPT = 'a commercial 1/7 scale figurine of the character in the picture was created, depicting a realistic style and a realistic environment. The figurine is placed on a computer desk with a round transparent acrylic base. There is no text on the base. The computer screen shows the Zbrush modeling process of the figurine. Next to the computer screen is a BANDAI-style toy box with the original painting printed on it.'
+
+// ==== PROMPTS ====
+const PROMPTS = [
+  `masterpiece, best quality, highly detailed 1/7 scale commercialized figurine of characters in a realistic style, placed on a cluttered computer desk, round transparent acrylic base with no text, Zbrush modeling process displayed on the computer screen, BANDAI-style toy packaging box next to the screen, featuring vibrant two-dimensional flat illustrations of the original artwork, realistic environment with subtle lighting, intricate details on the figurine and packaging, 8K resolution, photorealistic rendering, professional studio setup, clean and organized desk with peripherals, soft ambient lighting, focus on craftsmanship and presentation`,
+
+  `create a 1/7 scale commercialized figurine of the characters in the picture, in a realistic style, in a real environment. The figurine is placed on a computer desk. The figurine has a round transparent acrylic base, with no text on the base. The content on the computer screen is the Zbrush modeling process of this figurine. Next to the computer screen is a BANDAI-style toy packaging box printed with the original artwork. The packaging features two-dimensional flat illustrations`,
+
+  `masterpiece, best quality, highly detailed 1/7 scale commercialized figurine of characters in a realistic style, placed on a modern computer desk, round transparent acrylic base with no text, Zbrush modeling process displayed on the computer screen, BANDAI-style toy packaging box next to the screen featuring vibrant two-dimensional flat illustrations of the original artwork, realistic environment with soft natural lighting, intricate details on the figurine and packaging, 8K resolution, photorealistic rendering, professional studio setup, clean and organized desk with subtle reflections on the acrylic base, cinematic composition, ultra-detailed textures, lifelike materials, and a sense of craftsmanship and artistry.`,
+
+  `masterpiece, best quality, highly detailed 1/7 scale commercialized figurine of characters in a realistic style, placed on a cluttered computer desk, round transparent acrylic base with no text, Zbrush modeling process displayed on the computer screen, BANDAI-style toy packaging box next to the screen featuring vibrant two-dimensional flat illustrations of the original artwork, realistic environment with soft natural lighting, intricate details on the figurine and packaging, 8K resolution, photorealistic rendering, ultra-realistic textures, studio setup with focus on the figurine and packaging, professional workspace ambiance, cinematic composition, depth of field, sharp focus on the figurine and packaging, highly detailed desk accessories, realistic shadows and reflections, ultra-high definition, Unreal Engine quality`,
+
+  `masterpiece, best quality, highly detailed 1/7 scale commercialized figurine of the characters, realistic style, placed on a cluttered computer desk, round transparent acrylic base with no text, Zbrush modeling process displayed on the computer screen, BANDAI-style toy packaging box next to the screen, featuring vibrant two-dimensional flat illustrations of the original artwork, natural lighting from a nearby window, soft shadows, ultra-realistic textures, 8K resolution, cinematic composition, focus on the figurine and its surroundings, professional studio setup, intricate details on the figurine and packaging, lifelike materials, clean and organized desk environment`,
+
+  `masterpiece, best quality, highly detailed 1/7 scale commercialized figurine of the characters, ultra-realistic style, placed on a slightly cluttered computer desk with scattered art tools and reference sketches, round transparent acrylic base with no text, Zbrush modeling process displayed on the computer screen showing wireframe and sculpting stages, BANDAI-style toy packaging box next to the screen with vibrant two-dimensional flat illustrations of the original artwork and holographic foil accents, natural diffused lighting from a nearby window casting soft shadows, ultra-realistic textures showing fine details like fabric folds on the figurine's clothing and plastic sheen on the packaging, 8K resolution, cinematic shallow depth of field focusing on the figurine with background slightly blurred, professional studio setup with color-calibrated monitor and Wacom tablet, intricate details including tiny sculpted facial features and delicate accessories, lifelike materials with accurate subsurface scattering on skin and metallic reflections, clean but artistically organized desk environment with pencil holders and miniature paint bottles, warm ambient glow enhancing the collectible atmosphere`
+]
+
+function getRandomPrompt() {
+  return PROMPTS[Math.floor(Math.random() * PROMPTS.length)]
+}
 
 // === Helper ===
 function randomString(len = 12) {
@@ -130,16 +148,21 @@ async function uploadToQuaxPuppeteer(buffer) {
   return url
 }
 
+// === API Handler ===
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   if (req.method !== 'GET') return res.status(405).json({ success: false, error: 'Only GET allowed' })
 
-  const { url } = req.query
+  const { url, promptIndex } = req.query
   if (!url) return res.status(400).json({ success: false, error: 'URL diperlukan' })
 
   try {
     const imgBuffer = await cloudscraper.get({ uri: url, encoding: null })
-    const hasil = await img2img(imgBuffer, PROMPT)
+
+    // pilih prompt
+    const prompt = (promptIndex && PROMPTS[promptIndex]) || getRandomPrompt()
+
+    const hasil = await img2img(imgBuffer, prompt)
 
     let downloadUrl = await uploadToQuaxDirect(hasil)
     if (!downloadUrl) downloadUrl = await uploadToQuaxPuppeteer(hasil)
@@ -157,7 +180,8 @@ export default async function handler(req, res) {
         details: {
           platform: 'Photogpt API',
           hosting: 'qu.ax',
-          expired: 'No Expiry'
+          expired: 'No Expiry',
+          promptUsed: prompt
         }
       }
     })
