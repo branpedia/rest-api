@@ -1,5 +1,6 @@
 import cloudscraper from 'cloudscraper';
 import { JSDOM } from 'jsdom';
+import puppeteer from 'puppeteer';
 
 export default async function handler(request, response) {
   // Set CORS headers
@@ -37,81 +38,129 @@ export default async function handler(request, response) {
       });
     }
 
-    // Step 1: Submit the Spotify URL to the downloader service
-    const formData = {
-      url: url
-    };
+    let html;
+    let browser;
 
-    const submitResponse = await cloudscraper.post({
-      uri: 'https://spotifydownloader.pro/id/',
-      formData: formData,
-      headers: {
-        'Origin': 'https://spotifydownloader.pro',
-        'Referer': 'https://spotifydownloader.pro/id/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    try {
+      // First try with cloudscraper
+      html = await cloudscraper.get('https://spotisongdownloader.to');
+      
+      // Get cookies from initial request
+      const cookies = await cloudscraper.getCookieString('https://spotisongdownloader.to');
+      
+      // Submit the Spotify URL to the downloader service
+      const formData = {
+        url: url
+      };
+
+      const submitResponse = await cloudscraper.post({
+        uri: 'https://spotisongdownloader.to/api/composer/spotify/xsingle_track.php',
+        formData: formData,
+        headers: {
+          'Cookie': cookies,
+          'Origin': 'https://spotisongdownloader.to',
+          'Referer': 'https://spotisongdownloader.to',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+      });
+
+      const trackData = JSON.parse(submitResponse);
+      
+      // Get download URL
+      const downloadResponse = await cloudscraper.post({
+        uri: 'https://spotisongdownloader.to/api/composer/spotify/ssdw23456ytrfds.php',
+        form: {
+          song_name: trackData.song_name,
+          artist_name: trackData.artist,
+          url: url,
+          zip_download: 'false',
+          quality: 'm4a'
+        },
+        headers: {
+          'Cookie': cookies,
+          'Origin': 'https://spotisongdownloader.to',
+          'Referer': 'https://spotisongdownloader.to',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+      });
+
+      const downloadData = JSON.parse(downloadResponse);
+
+      return response.status(200).json({
+        success: true,
+        data: {
+          title: trackData.song_name,
+          artist: trackData.artist,
+          duration: trackData.duration,
+          album: trackData.album_name,
+          released: trackData.released,
+          coverUrl: trackData.img,
+          downloadUrl: downloadData.dlink,
+          fileExtension: 'm4a'
+        }
+      });
+
+    } catch (error) {
+      console.log('Cloudscraper failed, trying with Puppeteer...');
+      
+      // If cloudscraper fails, use Puppeteer as fallback
+      browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      });
+      
+      const page = await browser.newPage();
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+      
+      // Go to the downloader site
+      await page.goto('https://spotisongdownloader.to', { waitUntil: 'networkidle2' });
+      
+      // Enter the Spotify URL
+      await page.type('input[name="url"]', url);
+      
+      // Click the download button
+      await page.click('button[type="submit"]');
+      
+      // Wait for results
+      await page.waitForSelector('.download-btn', { timeout: 10000 });
+      
+      // Extract information
+      const trackInfo = await page.evaluate(() => {
+        const titleElem = document.querySelector('.song-title');
+        const artistElem = document.querySelector('.artist-name');
+        const downloadBtn = document.querySelector('.download-btn');
+        
+        return {
+          title: titleElem ? titleElem.textContent.trim() : 'Unknown',
+          artist: artistElem ? artistElem.textContent.trim() : 'Unknown',
+          downloadUrl: downloadBtn ? downloadBtn.href : null
+        };
+      });
+      
+      if (!trackInfo.downloadUrl) {
+        throw new Error('Tidak dapat menemukan link download');
       }
-    });
+      
+      await browser.close();
 
-    // Parse the response HTML
-    const dom = new JSDOM(submitResponse);
-    const document = dom.window.document;
-
-    // Extract metadata
-    const titleElement = document.querySelector('.rb_title');
-    const title = titleElement ? titleElement.textContent.trim() : 'Unknown Title';
-    
-    let artist = 'Unknown Artist';
-    if (titleElement) {
-      const artistSpan = titleElement.querySelector('span');
-      artist = artistSpan ? artistSpan.textContent.trim().replace(/[()]/g, '') : 'Unknown Artist';
+      return response.status(200).json({
+        success: true,
+        data: {
+          title: trackInfo.title,
+          artist: trackInfo.artist,
+          downloadUrl: trackInfo.downloadUrl,
+          fileExtension: 'mp3'
+        }
+      });
     }
-
-    const coverElement = document.querySelector('.rb_icon');
-    const coverUrl = coverElement ? coverElement.getAttribute('src') : '';
-
-    // Extract download link
-    const downloadButton = document.querySelector('a.rb_btn');
-    const downloadPath = downloadButton ? downloadButton.getAttribute('href') : '';
-
-    if (!downloadPath) {
-      throw new Error('Tidak dapat menemukan link download');
-    }
-
-    // Construct full download URL
-    const downloadUrl = downloadPath.startsWith('http') 
-      ? downloadPath 
-      : `https://spotifydownloader.pro${downloadPath}`;
-
-    // Get file information
-    const fileInfoResponse = await cloudscraper.head(downloadUrl);
-    const contentLength = fileInfoResponse.headers['content-length'];
-    const contentType = fileInfoResponse.headers['content-type'] || 'audio/mpeg';
-    
-    let fileSize = 'Unknown';
-    if (contentLength) {
-      const sizeInMB = parseInt(contentLength) / (1024 * 1024);
-      fileSize = `${sizeInMB.toFixed(2)} MB`;
-    }
-
-    // Get file extension from content type
-    let fileExtension = 'mp3';
-    if (contentType.includes('mpeg')) fileExtension = 'mp3';
-    if (contentType.includes('ogg')) fileExtension = 'ogg';
-
-    return response.status(200).json({
-      success: true,
-      data: {
-        title: title,
-        artist: artist,
-        size: fileSize,
-        extension: fileExtension,
-        coverUrl: coverUrl,
-        downloadUrl: downloadUrl
-      }
-    });
 
   } catch (error) {
     console.error('Error fetching Spotify data:', error);
+    
+    // Close browser if it's still open
+    if (browser) {
+      await browser.close();
+    }
     
     // Retry logic
     if (retry < 2) {
