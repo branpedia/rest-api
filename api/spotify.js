@@ -42,6 +42,20 @@ export default async function handler(request, response) {
     try {
       console.log('Mencoba server 1...');
       result = await tryServer1(url);
+      
+      // If download URL is from problematic domains, try to resolve it
+      if (result.downloadUrl && (result.downloadUrl.includes('mymp3.xyz') || 
+                                 result.downloadUrl.includes('spapu') ||
+                                 result.downloadUrl.includes('dl.spapu'))) {
+        console.log('Mencoba mengatasi URL download bermasalah...');
+        try {
+          result.downloadUrl = await resolveProblematicUrl(result.downloadUrl);
+          result.directDownload = true;
+        } catch (resolveError) {
+          console.log('Gagal mengatasi URL bermasalah, mencoba server 2...');
+          throw new Error(`URL download bermasalah: ${resolveError.message}`);
+        }
+      }
     } catch (error) {
       errorMessages.push(`Server 1: ${error.message}`);
       console.log('Server 1 gagal, mencoba server 2...', error.message);
@@ -77,6 +91,107 @@ export default async function handler(request, response) {
   }
 }
 
+// Function to resolve problematic download URLs
+async function resolveProblematicUrl(downloadUrl) {
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    
+    const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+    
+    // Navigate to the download URL
+    await page.goto(downloadUrl, { 
+      waitUntil: 'networkidle2',
+      timeout: 30000
+    });
+    
+    // Wait a bit for redirects
+    await page.waitForTimeout(3000);
+    
+    // Check if we've been redirected to a direct download
+    const currentUrl = page.url();
+    
+    // If current URL is a direct audio file, return it
+    if (currentUrl.match(/\.(mp3|m4a|aac|wav|flac|ogg)$/i)) {
+      await browser.close();
+      return currentUrl;
+    }
+    
+    // Try to find download buttons or links
+    const directDownloadUrl = await page.evaluate(() => {
+      // Look for direct download links
+      const downloadSelectors = [
+        'a[href*=".mp3"]', 
+        'a[href*=".m4a"]',
+        'a[href*=".aac"]',
+        'a[href*="download"]',
+        'button[onclick*="download"]',
+        'a[onclick*="download"]'
+      ];
+      
+      for (const selector of downloadSelectors) {
+        const elements = document.querySelectorAll(selector);
+        for (const element of elements) {
+          const href = element.getAttribute('href') || element.getAttribute('onclick');
+          if (href && href.match(/https?:\/\//)) {
+            // Extract URL from onclick if needed
+            if (href.includes('window.location') || href.includes('window.open')) {
+              const urlMatch = href.match(/(https?:\/\/[^'"]+)/);
+              if (urlMatch) return urlMatch[1];
+            }
+            return href;
+          }
+        }
+      }
+      
+      // Look for audio elements
+      const audioElement = document.querySelector('audio');
+      if (audioElement && audioElement.src) {
+        return audioElement.src;
+      }
+      
+      return null;
+    });
+    
+    if (directDownloadUrl) {
+      await browser.close();
+      return directDownloadUrl;
+    }
+    
+    // As a last resort, try to intercept network requests
+    const finalUrl = await new Promise((resolve) => {
+      page.on('response', async (response) => {
+        const url = response.url();
+        if (url.match(/\.(mp3|m4a|aac|wav|flac|ogg)$/i)) {
+          resolve(url);
+        }
+      });
+      
+      // Click any button that might trigger download
+      setTimeout(async () => {
+        try {
+          await page.click('body');
+        } catch (e) {}
+        
+        // If no response after 5 seconds, return original URL
+        setTimeout(() => resolve(downloadUrl), 5000);
+      }, 1000);
+    });
+    
+    await browser.close();
+    return finalUrl;
+    
+  } catch (error) {
+    if (browser) await browser.close();
+    console.error('Error resolving problematic URL:', error);
+    throw new Error(`Failed to resolve URL: ${error.message}`);
+  }
+}
+
 // Server 1 implementation - using cloudscraper
 async function tryServer1(spotifyUrl) {
   try {
@@ -84,8 +199,6 @@ async function tryServer1(spotifyUrl) {
     
     // Get initial page to obtain cookies
     const initialHtml = await cloudscraper.get(baseUrl);
-    const dom = new JSDOM(initialHtml);
-    const document = dom.window.document;
     
     // Extract cookies from the response
     let cookies = [];
@@ -261,6 +374,14 @@ async function tryServer2(spotifyUrl) {
     }
     
     await browser.close();
+    
+    // If the download URL is problematic, try to resolve it
+    if (result.downloadUrl.includes('mymp3.xyz') || 
+        result.downloadUrl.includes('spapu') ||
+        result.downloadUrl.includes('dl.spapu')) {
+      result.downloadUrl = await resolveProblematicUrl(result.downloadUrl);
+      result.directDownload = true;
+    }
     
     return {
       song_name: result.title.replace(`(${result.artist})`, '').trim(),
