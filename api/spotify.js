@@ -152,8 +152,27 @@ export default async function handler(request, response) {
 
         // Get file size information
         let fileSize = 'Unknown';
+        let encodedDownloadUrl = dl.dlink;
+        
         try {
-            const headResponse = await fetch(dl.dlink, { method: 'HEAD' });
+            // Encode URL yang mengandung spasi
+            if (dl.dlink.includes(' ')) {
+                // Pisahkan base URL dan parameter
+                const urlObj = new URL(dl.dlink);
+                const baseUrl = `${urlObj.origin}${urlObj.pathname}`;
+                const searchParams = new URLSearchParams(urlObj.search);
+                
+                // Encode nilai parameter yang mengandung spasi
+                for (let [key, value] of searchParams.entries()) {
+                    if (value.includes(' ')) {
+                        searchParams.set(key, encodeURIComponent(value));
+                    }
+                }
+                
+                encodedDownloadUrl = `${baseUrl}?${searchParams.toString()}`;
+            }
+
+            const headResponse = await fetch(encodedDownloadUrl, { method: 'HEAD' });
             const contentLength = headResponse.headers.get('content-length');
             if (contentLength) {
                 const sizeInMB = parseInt(contentLength) / (1024 * 1024);
@@ -161,6 +180,21 @@ export default async function handler(request, response) {
             }
         } catch (sizeError) {
             console.log('Could not determine file size:', sizeError);
+            
+            // Fallback: coba URL asli jika encoded URL gagal
+            if (encodedDownloadUrl !== dl.dlink) {
+                try {
+                    const headResponseFallback = await fetch(dl.dlink, { method: 'HEAD' });
+                    const contentLength = headResponseFallback.headers.get('content-length');
+                    if (contentLength) {
+                        const sizeInMB = parseInt(contentLength) / (1024 * 1024);
+                        fileSize = `${sizeInMB.toFixed(2)} MB`;
+                    }
+                    encodedDownloadUrl = dl.dlink; // Kembali ke URL asli
+                } catch (fallbackError) {
+                    console.log('Fallback also failed:', fallbackError);
+                }
+            }
         }
 
         return response.status(200).json({
@@ -174,7 +208,8 @@ export default async function handler(request, response) {
                 size: fileSize,
                 extension: 'm4a',
                 coverUrl: dl.img,
-                downloadUrl: dl.dlink
+                downloadUrl: encodedDownloadUrl,
+                fileName: `${dl.song_name.replace(/ /g, '_')}-${dl.artist.replace(/ /g, '_')}.m4a`
             }
         });
 
