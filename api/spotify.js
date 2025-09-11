@@ -2,7 +2,7 @@ import cloudscraper from 'cloudscraper';
 import { JSDOM } from 'jsdom';
 import puppeteer from 'puppeteer';
 
-// Tambahkan timeout untuk cloudscraper
+// Konfigurasi cloudscraper
 cloudscraper.defaults({
   timeout: 30000,
   challengesToSolve: 3,
@@ -45,29 +45,43 @@ export default async function handler(request, response) {
     let result;
     let errorMessages = [];
     
-    // Try multiple servers with fallback
+    // Coba semua server secara berurutan
     try {
       console.log('Mencoba server 1 (spotisongdownloader.to)...');
       result = await tryServer1(url);
+      console.log('Server 1 berhasil');
     } catch (error) {
       errorMessages.push(`Server 1: ${error.message}`);
       console.log('Server 1 gagal:', error.message);
       
-      // If server 1 fails, try server 2
+      // Coba server 2
       try {
         console.log('Mencoba server 2 (spotifydownloader.pro)...');
         result = await tryServer2(url);
+        console.log('Server 2 berhasil');
       } catch (error2) {
         errorMessages.push(`Server 2: ${error2.message}`);
         console.log('Server 2 gagal:', error2.message);
         
-        // If server 2 fails, try server 3 (alternatif)
+        // Coba server 3
         try {
-          console.log('Mencoba server 3 (alternatif)...');
+          console.log('Mencoba server 3 (spotifymate.com)...');
           result = await tryServer3(url);
+          console.log('Server 3 berhasil');
         } catch (error3) {
           errorMessages.push(`Server 3: ${error3.message}`);
-          throw new Error(`Semua server gagal: ${errorMessages.join('; ')}`);
+          console.log('Server 3 gagal:', error3.message);
+          
+          // Coba server 4 sebagai fallback terakhir
+          try {
+            console.log('Mencoba server 4 (spotify-downloader.alien...)...');
+            result = await tryServer4(url);
+            console.log('Server 4 berhasil');
+          } catch (error4) {
+            errorMessages.push(`Server 4: ${error4.message}`);
+            console.log('Server 4 gagal:', error4.message);
+            throw new Error(`Semua server gagal: ${errorMessages.join('; ')}`);
+          }
         }
       }
     }
@@ -94,29 +108,21 @@ export default async function handler(request, response) {
   }
 }
 
-// Server 1 implementation - using cloudscraper
+// Server 1 implementation - spotisongdownloader.to
 async function tryServer1(spotifyUrl) {
   try {
     const baseUrl = 'https://spotisongdownloader.to';
     
-    // Get initial page to obtain cookies with custom headers
-    const initialHtml = await cloudscraper.get({
-      uri: baseUrl,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br',
-      }
-    });
+    // Get initial page
+    const initialHtml = await cloudscraper.get(baseUrl);
     
-    // Extract cookies from cloudscraper
+    // Extract cookies
     let cookieString = '';
     if (initialHtml.request && initialHtml.request.headers && initialHtml.request.headers.cookie) {
       cookieString = initialHtml.request.headers.cookie;
     }
     
-    // Prepare headers with cookies
+    // Prepare headers
     const headers = {
       'Referer': baseUrl,
       'Cookie': cookieString,
@@ -133,10 +139,10 @@ async function tryServer1(spotifyUrl) {
     });
     
     if (!trackInfoResponse || !trackInfoResponse.song_name) {
-      throw new Error('Invalid response from server 1');
+      throw new Error('Invalid response from server');
     }
     
-    // Prepare payload for the next request
+    // Prepare payload
     const payload = [
       trackInfoResponse.song_name,
       trackInfoResponse.duration,
@@ -147,7 +153,7 @@ async function tryServer1(spotifyUrl) {
       trackInfoResponse.released
     ];
     
-    // Send the payload
+    // Send payload
     await cloudscraper.post({
       uri: `${baseUrl}/track.php`,
       headers: headers,
@@ -169,7 +175,7 @@ async function tryServer1(spotifyUrl) {
     });
     
     if (!downloadResponse || !downloadResponse.dlink) {
-      throw new Error('No download link received from server 1');
+      throw new Error('No download link received');
     }
     
     return {
@@ -184,122 +190,72 @@ async function tryServer1(spotifyUrl) {
     };
     
   } catch (error) {
-    console.error('Error with server 1:', error);
-    throw new Error(`Server 1 failed: ${error.message}`);
+    throw new Error(error.message);
   }
 }
 
-// Server 2 implementation - using puppeteer
+// Server 2 implementation - spotifydownloader.pro
 async function tryServer2(spotifyUrl) {
   let browser;
   try {
     browser = await puppeteer.launch({
       headless: true,
-      args: [
-        '--no-sandbox', 
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu'
-      ]
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     
     const page = await browser.newPage();
-    
-    // Set realistic user agent and viewport
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-    await page.setViewport({ width: 1366, height: 768 });
     
-    // Block unnecessary resources to speed up page load
-    await page.setRequestInterception(true);
-    page.on('request', (request) => {
-      if (['image', 'stylesheet', 'font', 'media'].includes(request.resourceType())) {
-        request.abort();
-      } else {
-        request.continue();
-      }
-    });
-    
-    // Navigate to the downloader site
+    // Navigate to downloader site
     await page.goto('https://spotifydownloader.pro/id/', { 
       waitUntil: 'domcontentloaded',
       timeout: 30000
     });
     
-    // Fill in the form
+    // Fill form
     await page.type('input[name="url"]', spotifyUrl);
     
-    // Submit the form
+    // Submit form
     await Promise.all([
       page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }),
       page.click('button[type="submit"]')
     ]);
     
-    // Wait for results to load
+    // Wait for results
     await page.waitForSelector('.rb_title, .rb_btn, a[href*="download"]', { timeout: 15000 });
     
     // Extract information
     const result = await page.evaluate(() => {
-      // Try multiple selectors for title
-      const titleSelectors = ['.rb_title', '.title', 'h1', 'h2', 'h3', '[class*="title"]'];
-      let titleElement = null;
-      for (const selector of titleSelectors) {
-        titleElement = document.querySelector(selector);
-        if (titleElement) break;
-      }
-      
+      // Find title
+      const titleElement = document.querySelector('.rb_title') || 
+                           document.querySelector('.title') || 
+                           document.querySelector('h1, h2, h3');
       const title = titleElement ? titleElement.textContent.trim() : 'Unknown Title';
       
+      // Find artist
       let artist = 'Unknown Artist';
       if (titleElement) {
         const artistSpan = titleElement.querySelector('span');
         artist = artistSpan ? artistSpan.textContent.trim().replace(/[()]/g, '') : 'Unknown Artist';
       }
       
-      // Try multiple selectors for cover image
-      const coverSelectors = ['.rb_icon', '.cover', 'img', '[src*="image"]'];
-      let coverElement = null;
-      for (const selector of coverSelectors) {
-        coverElement = document.querySelector(selector);
-        if (coverElement && coverElement.src) break;
-      }
+      // Find cover image
+      const coverElement = document.querySelector('.rb_icon') || 
+                           document.querySelector('.cover') || 
+                           document.querySelector('img');
       const coverUrl = coverElement ? coverElement.src : '';
       
-      // Try multiple selectors for download button
-      const downloadSelectors = ['.rb_btn', 'a[href*="download"]', 'a[href*=".mp3"]', 'a[href*=".m4a"]', 'button'];
-      let downloadButton = null;
-      for (const selector of downloadSelectors) {
-        downloadButton = document.querySelector(selector);
-        if (downloadButton && (downloadButton.href || downloadButton.onclick)) break;
-      }
-      
-      let downloadUrl = '';
-      if (downloadButton) {
-        downloadUrl = downloadButton.href || '';
-        
-        // If no href, check onclick
-        if (!downloadUrl && downloadButton.onclick) {
-          const onclickText = downloadButton.onclick.toString();
-          const urlMatch = onclickText.match(/(https?:\/\/[^'"]+)/);
-          if (urlMatch) downloadUrl = urlMatch[1];
-        }
-      }
+      // Find download button
+      const downloadButton = document.querySelector('.rb_btn') || 
+                             document.querySelector('a[href*="download"]') ||
+                             document.querySelector('a[href*=".mp3"], a[href*=".m4a"]');
+      const downloadUrl = downloadButton ? downloadButton.href : '';
       
       return { title, artist, coverUrl, downloadUrl };
     });
     
     if (!result.downloadUrl) {
-      // Try to find download URL in page content
-      const pageContent = await page.content();
-      const urlMatch = pageContent.match(/(https?:\/\/[^\s"']*\.(mp3|m4a)[^\s"']*)/i);
-      if (urlMatch && urlMatch[1]) {
-        result.downloadUrl = urlMatch[1];
-      } else {
-        throw new Error('Download URL not found on server 2');
-      }
+      throw new Error('Download URL not found');
     }
     
     await browser.close();
@@ -314,78 +270,49 @@ async function tryServer2(spotifyUrl) {
     
   } catch (error) {
     if (browser) await browser.close();
-    console.error('Error with server 2:', error);
-    throw new Error(`Server 2 failed: ${error.message}`);
+    throw new Error(error.message);
   }
 }
 
-// Server 3 implementation - alternative server
+// Server 3 implementation - spotifymate.com
 async function tryServer3(spotifyUrl) {
   let browser;
   try {
     browser = await puppeteer.launch({
       headless: true,
-      args: [
-        '--no-sandbox', 
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu'
-      ]
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-    await page.setViewport({ width: 1366, height: 768 });
     
-    // Try a different downloader site
+    // Navigate to downloader site
     await page.goto('https://spotifymate.com/', { 
       waitUntil: 'domcontentloaded',
       timeout: 30000
     });
     
-    // Fill in the form
+    // Fill form
     await page.type('input[type="text"]', spotifyUrl);
     
-    // Submit the form
+    // Submit form
     await page.click('button[type="submit"]');
     
     // Wait for conversion
-    await page.waitForSelector('.download-button, a[href*="download"], button[onclick*="download"]', { timeout: 30000 });
+    await page.waitForSelector('.download-button, a[href*="download"]', { timeout: 30000 });
     
     // Get download URL
     const downloadUrl = await page.evaluate(() => {
-      // Try multiple selectors for download button
-      const downloadSelectors = ['.download-button', 'a[href*="download"]', 'button[onclick*="download"]'];
-      let downloadButton = null;
-      
-      for (const selector of downloadSelectors) {
-        downloadButton = document.querySelector(selector);
-        if (downloadButton) break;
-      }
-      
-      if (!downloadButton) return null;
-      
-      // Get URL from href or onclick
-      if (downloadButton.href) {
-        return downloadButton.href;
-      } else if (downloadButton.onclick) {
-        const onclickText = downloadButton.onclick.toString();
-        const urlMatch = onclickText.match(/(https?:\/\/[^'"]+)/);
-        return urlMatch ? urlMatch[1] : null;
-      }
-      
-      return null;
+      const downloadButton = document.querySelector('.download-button') || 
+                             document.querySelector('a[href*="download"]');
+      return downloadButton ? downloadButton.href : null;
     });
     
     if (!downloadUrl) {
-      throw new Error('Download URL not found on server 3');
+      throw new Error('Download URL not found');
     }
     
-    // Try to get track info
+    // Get track info
     const trackInfo = await page.evaluate(() => {
       const titleElem = document.querySelector('h1, h2, h3, .title, .song-title');
       const title = titleElem ? titleElem.textContent.trim() : 'Unknown Title';
@@ -393,7 +320,7 @@ async function tryServer3(spotifyUrl) {
       const artistElem = document.querySelector('.artist, .singer, .author');
       const artist = artistElem ? artistElem.textContent.trim() : 'Unknown Artist';
       
-      const coverElem = document.querySelector('img.cover, img.thumbnail, img[src*="image"]');
+      const coverElem = document.querySelector('img.cover, img.thumbnail');
       const coverUrl = coverElem ? coverElem.src : '';
       
       return { title, artist, coverUrl };
@@ -411,7 +338,75 @@ async function tryServer3(spotifyUrl) {
     
   } catch (error) {
     if (browser) await browser.close();
-    console.error('Error with server 3:', error);
-    throw new Error(`Server 3 failed: ${error.message}`);
+    throw new Error(error.message);
+  }
+}
+
+// Server 4 implementation - alternatif terakhir
+async function tryServer4(spotifyUrl) {
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    
+    const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    
+    // Navigate to downloader site
+    await page.goto('https://spotify-downloader.alien.slayer.workers.dev/', { 
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
+    
+    // Find input field and fill it
+    await page.type('input[type="text"], input[type="url"]', spotifyUrl);
+    
+    // Find and click submit button
+    await page.click('button[type="submit"], input[type="submit"]');
+    
+    // Wait for results
+    await page.waitForSelector('a[href*=".mp3"], a[href*=".m4a"], .download-btn', { timeout: 30000 });
+    
+    // Get download URL
+    const downloadUrl = await page.evaluate(() => {
+      const downloadLink = document.querySelector('a[href*=".mp3"]') || 
+                           document.querySelector('a[href*=".m4a"]') ||
+                           document.querySelector('.download-btn');
+      return downloadLink ? downloadLink.href : null;
+    });
+    
+    if (!downloadUrl) {
+      throw new Error('Download URL not found');
+    }
+    
+    // Get track info
+    const trackInfo = await page.evaluate(() => {
+      const titleElem = document.querySelector('h1, h2, h3, .title');
+      const title = titleElem ? titleElem.textContent.trim() : 'Unknown Title';
+      
+      const artistElem = document.querySelector('.artist, .author');
+      const artist = artistElem ? artistElem.textContent.trim() : 'Unknown Artist';
+      
+      const coverElem = document.querySelector('img');
+      const coverUrl = coverElem ? coverElem.src : '';
+      
+      return { title, artist, coverUrl };
+    });
+    
+    await browser.close();
+    
+    return {
+      song_name: trackInfo.title,
+      artist: trackInfo.artist,
+      img: trackInfo.coverUrl,
+      downloadUrl: downloadUrl,
+      source: 'server_4'
+    };
+    
+  } catch (error) {
+    if (browser) await browser.close();
+    throw new Error(error.message);
   }
 }
