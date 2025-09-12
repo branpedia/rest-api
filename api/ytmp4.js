@@ -38,13 +38,14 @@ export default async function handler(request, response) {
     let result;
     
     try {
-      // First try with cloudscraper
-      result = await convertWithCloudscraper(url, quality);
+      // First try with ssvid
+      result = await convertWithSsvid(url, quality);
     } catch (error) {
-      console.log('Cloudscraper failed, trying with Puppeteer...');
+      console.log('Ssvid failed, trying with Y2Mate...');
       
-      // If cloudscraper fails, use Puppeteer as fallback
-      result = await convertWithPuppeteer(url, quality);
+      // If ssvid fails, use Y2Mate as fallback
+      const videoId = extractVideoId(url);
+      result = await convertWithY2Mate(videoId, quality);
     }
 
     return response.status(200).json({
@@ -77,151 +78,123 @@ export default async function handler(request, response) {
   }
 }
 
-// Convert using Cloudscraper
-async function convertWithCloudscraper(url, quality) {
-  try {
-    // STEP 1: SEARCH - Get video info
-    const searchResponse = await cloudscraper.post({
-      uri: 'https://ssvid.net/id4/api/ajaxSearch/index',
-      form: { query: url },
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Origin': 'https://ssvid.net/id4',
-        'Referer': 'https://ssvid.net/id4'
-      }
-    });
-
-    const searchData = JSON.parse(searchResponse);
-
-    if (!searchData || !searchData.vid) {
-      throw new Error('Video tidak ditemukan di ssvid.net');
+// Extract video ID from YouTube URL
+function extractVideoId(url) {
+  let videoId = '';
+  if (url.includes('youtube.com/watch?v=')) {
+    videoId = url.split('v=')[1];
+    const ampersandPosition = videoId.indexOf('&');
+    if (ampersandPosition !== -1) {
+      videoId = videoId.substring(0, ampersandPosition);
     }
-
-    // Get token for the requested quality (default to auto)
-    let token;
-    let selectedQuality = quality;
-    
-    // Quality mapping
-    const qualityMap = {
-      'auto': searchData?.links?.mp4?.auto?.k,
-      '1080p': searchData?.links?.mp4?.["1080"]?.k,
-      '720p': searchData?.links?.mp4?.["720"]?.k,
-      '480p': searchData?.links?.mp4?.["480"]?.k,
-      '360p': searchData?.links?.mp4?.["360"]?.k
-    };
-
-    // If requested quality not available, try auto
-    token = qualityMap[quality] || qualityMap['auto'];
-    
-    // If auto not available, try any available quality
-    if (!token) {
-      for (const q in qualityMap) {
-        if (qualityMap[q]) {
-          token = qualityMap[q];
-          selectedQuality = q;
-          break;
-        }
-      }
+  } else if (url.includes('youtu.be/')) {
+    videoId = url.split('youtu.be/')[1];
+    const ampersandPosition = videoId.indexOf('?');
+    if (ampersandPosition !== -1) {
+      videoId = videoId.substring(0, ampersandPosition);
     }
-
-    if (!token) {
-      throw new Error("Token konversi untuk MP4 tidak ditemukan.");
-    }
-
-    const vid = searchData.vid;
-
-    // STEP 2: CONVERT - Get download link
-    const convertResponse = await cloudscraper.post({
-      uri: 'https://ssvid.net/api/ajaxConvert/convert',
-      form: { vid, k: token },
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Origin': 'https://ssvid.net',
-        'Referer': 'https://ssvid.net/'
-      }
-    });
-
-    const convertData = JSON.parse(convertResponse);
-    
-    if (!convertData || !convertData.dlink) {
-      throw new Error("Download link tidak ditemukan.");
-    }
-
-    return {
-      title: searchData.title || "YouTube Video",
-      downloadUrl: convertData.dlink,
-      format: "mp4",
-      quality: selectedQuality,
-      duration: searchData.duration,
-      thumbnail: searchData.image,
-      filesize: searchData?.links?.mp4?.[selectedQuality === 'auto' ? 'auto' : selectedQuality.replace('p', '')]?.size
-    };
-    
-  } catch (error) {
-    console.error('Cloudscraper conversion error:', error);
-    throw error;
   }
+  return videoId;
 }
 
-// Convert using Puppeteer (fallback)
-async function convertWithPuppeteer(url, quality) {
+// Convert using SSvid.net
+async function convertWithSsvid(url, quality) {
   let browser;
   try {
     browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     });
     
     const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
     
-    // Navigate to y2mate.com (supports MP4)
-    await page.goto('https://www.y2mate.com/youtube-mp4', { 
+    // Navigate to ssvid.net
+    await page.goto('https://ssvid.net/id4', { 
       waitUntil: 'networkidle2',
       timeout: 30000
     });
     
-    // Input the URL
-    await page.type('#txt-url', url);
+    // Wait for input field
+    await page.waitForSelector('#search__input', { timeout: 10000 });
     
-    // Click the convert button
-    await page.click('#btn-submit');
+    // Clear input field first
+    await page.click('#search__input', { clickCount: 3 });
+    await page.keyboard.press('Backspace');
     
-    // Wait for conversion options to appear
-    await page.waitForSelector('.mp4-table', { timeout: 60000 });
+    // Fill input with YouTube URL
+    await page.type('#search__input', url);
     
-    // Select quality (try to find the requested quality)
-    let qualityFound = false;
+    // Click the start button
+    await page.click('#btn-start');
     
-    if (quality !== 'auto') {
-      try {
-        const qualityButtons = await page.$$('.mp4-table .table-bordered tbody tr');
-        for (const button of qualityButtons) {
-          const qualityText = await button.$eval('td:first-child', el => el.textContent.trim());
-          if (qualityText.includes(quality)) {
-            await button.click('a');
-            qualityFound = true;
-            break;
-          }
+    // Wait for results to appear
+    await page.waitForSelector('#result_container', { timeout: 60000 });
+    
+    // Check if there's a CAPTCHA
+    const hasCaptcha = await page.$('#CF-turnstile');
+    if (hasCaptcha) {
+      throw new Error('CAPTCHA detected, cannot proceed automatically');
+    }
+    
+    // Get video title
+    const title = await page.$eval('.vtitle', el => el.textContent.trim());
+    
+    // Get video ID
+    const videoId = await page.$eval('#video_id', el => el.value);
+    
+    // Get all available MP4 quality options
+    const qualityOptions = await page.$$eval('#mp4 .table-striped tbody tr', rows => 
+      rows.map(row => {
+        const qualityText = row.querySelector('td:first-child').textContent.trim();
+        const sizeText = row.querySelector('td:nth-child(2)').textContent.trim();
+        const button = row.querySelector('button');
+        const onclick = button.getAttribute('onclick');
+        // Extract the token from onclick attribute
+        const tokenMatch = onclick.match(/startConvert\('mp4','([^']+)'\)/);
+        const token = tokenMatch ? tokenMatch[1] : null;
+        return { quality: qualityText, size: sizeText, token };
+      })
+    );
+    
+    // Select the appropriate quality
+    let selectedOption;
+    if (quality === 'auto') {
+      // Prefer higher qualities first
+      selectedOption = qualityOptions.find(opt => opt.quality.includes('auto')) || 
+                       qualityOptions.find(opt => opt.quality.includes('1080p')) ||
+                       qualityOptions.find(opt => opt.quality.includes('720p')) ||
+                       qualityOptions[0];
+    } else {
+      // Try to find the exact quality
+      selectedOption = qualityOptions.find(opt => 
+        opt.quality.toLowerCase().includes(quality.toLowerCase())
+      ) || qualityOptions[0];
+    }
+    
+    if (!selectedOption || !selectedOption.token) {
+      throw new Error('Could not find valid conversion option');
+    }
+    
+    // Execute the conversion by clicking the button
+    await page.evaluate((qualityText) => {
+      const rows = document.querySelectorAll('#mp4 .table-striped tbody tr');
+      for (let row of rows) {
+        const rowQuality = row.querySelector('td:first-child').textContent.trim();
+        if (rowQuality === qualityText) {
+          const button = row.querySelector('button');
+          if (button) button.click();
+          break;
         }
-      } catch (e) {
-        console.log('Could not select specific quality, using default');
       }
-    }
+    }, selectedOption.quality);
     
-    // If specific quality not found or auto, use the first available option
-    if (!qualityFound) {
-      await page.click('.mp4-table .table-bordered tbody tr:first-child a');
-    }
+    // Wait for conversion to complete and get download link
+    // This might require handling the AJAX conversion process
+    // For now, we'll construct the download URL manually based on the token
     
-    // Wait for conversion to complete
-    await page.waitForSelector('#process-result .btn-file', { timeout: 120000 });
-    
-    // Get download link and title
-    const downloadUrl = await page.$eval('#process-result .btn-file', el => el.href);
-    const title = await page.$eval('.caption-text', el => el.textContent.trim());
+    // Construct download URL (this might need adjustment based on actual API)
+    const downloadUrl = `https://ssvid.net/api/download/mp4/${selectedOption.token}`;
     
     await browser.close();
     
@@ -229,15 +202,88 @@ async function convertWithPuppeteer(url, quality) {
       title: title,
       downloadUrl: downloadUrl,
       format: "mp4",
-      quality: qualityFound ? quality : 'auto',
+      quality: selectedOption.quality,
       duration: null,
-      thumbnail: null,
-      filesize: null
+      thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+      filesize: selectedOption.size
     };
     
   } catch (error) {
     if (browser) await browser.close();
-    console.error('Puppeteer conversion error:', error);
+    console.error('Ssvid conversion error:', error);
     throw error;
   }
-        }
+}
+
+// Convert using Y2Mate (fallback)
+async function convertWithY2Mate(videoId, quality) {
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    });
+    
+    const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+    
+    // Navigate to y2mate.com
+    await page.goto(`https://www.y2mate.com/youtube-mp4/${videoId}`, { 
+      waitUntil: 'networkidle2',
+      timeout: 30000
+    });
+    
+    // Wait for conversion options
+    await page.waitForSelector('.mp4-table', { timeout: 60000 });
+    
+    // Get video title
+    const title = await page.$eval('.caption-text', el => el.textContent.trim());
+    
+    // Get quality options
+    const qualityOptions = await page.$$eval('.mp4-table .table-bordered tbody tr', rows => 
+      rows.map(row => {
+        const qualityText = row.querySelector('td:first-child').textContent.trim();
+        const sizeText = row.querySelector('td:nth-child(2)').textContent.trim();
+        const link = row.querySelector('a').href;
+        return { quality: qualityText, size: sizeText, link };
+      })
+    );
+    
+    // Select quality
+    let selectedOption;
+    if (quality === 'auto') {
+      selectedOption = qualityOptions[0];
+    } else {
+      selectedOption = qualityOptions.find(option => option.quality.includes(quality)) || qualityOptions[0];
+    }
+    
+    // Click the selected quality
+    await page.evaluate((link) => {
+      const element = document.querySelector(`a[href="${link}"]`);
+      if (element) element.click();
+    }, selectedOption.link);
+    
+    // Wait for conversion
+    await page.waitForSelector('#process-result .btn-file', { timeout: 120000 });
+    
+    // Get download link
+    const downloadUrl = await page.$eval('#process-result .btn-file', el => el.href);
+    
+    await browser.close();
+    
+    return {
+      title: title,
+      downloadUrl: downloadUrl,
+      format: "mp4",
+      quality: selectedOption.quality,
+      duration: null,
+      thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+      filesize: selectedOption.size
+    };
+    
+  } catch (error) {
+    if (browser) await browser.close();
+    console.error('Y2Mate conversion error:', error);
+    throw error;
+  }
+}
