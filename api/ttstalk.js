@@ -2,21 +2,16 @@ import cloudscraper from 'cloudscraper';
 import { JSDOM } from 'jsdom';
 import puppeteer from 'puppeteer';
 
-// API TikTok Profile Fetcher
-// Endpoint: GET /api/ttstalk?username=[username]
-
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Handle OPTIONS request
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  // Only allow GET requests
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -28,19 +23,33 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Try cloudscraper first (faster)
-    let profileData = await scrapeWithCloudscraper(username);
-    
-    // If cloudscraper fails, use puppeteer (slower but more reliable)
-    if (!profileData) {
-      profileData = await scrapeWithPuppeteer(username);
+    // Try multiple times with refresh mechanism
+    let profileData = null;
+    let attempts = 0;
+    const maxAttempts = 3;
+
+    while (attempts < maxAttempts && !profileData) {
+      attempts++;
+      console.log(`Attempt ${attempts} for username: ${username}`);
+      
+      // First try with cloudscraper
+      profileData = await scrapeWithCloudscraper(username);
+      
+      // If still empty, try with puppeteer and refresh
+      if (!profileData || isEmptyProfile(profileData)) {
+        profileData = await scrapeWithPuppeteerWithRefresh(username);
+      }
+      
+      // Wait before next attempt
+      if (attempts < maxAttempts && (!profileData || isEmptyProfile(profileData))) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
     }
 
-    if (!profileData) {
-      return res.status(404).json({ error: 'Profile not found or private' });
+    if (!profileData || isEmptyProfile(profileData)) {
+      return res.status(404).json({ error: 'Profile not found or could not be loaded' });
     }
 
-    // Return successful response
     return res.status(200).json({
       success: true,
       data: profileData
@@ -55,7 +64,18 @@ export default async function handler(req, res) {
   }
 }
 
-// Function to scrape with Cloudscraper (faster)
+// Check if profile data is empty
+function isEmptyProfile(profileData) {
+  return (
+    profileData.following === 0 &&
+    profileData.followers === 0 &&
+    profileData.likes === 0 &&
+    profileData.displayName === '' &&
+    profileData.bio === ''
+  );
+}
+
+// Function to scrape with Cloudscraper
 async function scrapeWithCloudscraper(username) {
   try {
     const url = `https://www.tiktok.com/@${username}`;
@@ -63,11 +83,6 @@ async function scrapeWithCloudscraper(username) {
     const html = await cloudscraper.get(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1'
       }
     });
 
@@ -82,31 +97,28 @@ async function scrapeWithCloudscraper(username) {
   }
 }
 
-// Function to scrape with Puppeteer (for bypassing challenges)
-async function scrapeWithPuppeteer(username) {
+// Function to scrape with Puppeteer with refresh mechanism
+async function scrapeWithPuppeteerWithRefresh(username) {
   let browser = null;
   try {
     const url = `https://www.tiktok.com/@${username}`;
     
-    // Launch puppeteer with stealth settings
     browser = await puppeteer.launch({
       headless: true,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-web-security',
-        '--disable-features=IsolateOrigins,site-per-process',
         '--window-size=1920,1080'
       ]
     });
 
     const page = await browser.newPage();
     
-    // Set user agent and viewport
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
     await page.setViewport({ width: 1920, height: 1080 });
     
-    // Block unnecessary resources to speed up
+    // Block unnecessary resources
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       if (['image', 'stylesheet', 'font', 'media'].includes(request.resourceType())) {
@@ -116,28 +128,41 @@ async function scrapeWithPuppeteer(username) {
       }
     });
 
-    // Navigate to page
+    // First visit - handle popups and close them
+    console.log('First visit to handle popups...');
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-
-    // Handle specific TikTok popups and challenges
-    await handleTikTokSpecificPopups(page);
-
-    // Wait for profile data to load
-    await page.waitForSelector('[data-e2e="followers-count"], [data-e2e="following-count"], [data-e2e="likes-count"]', { 
-      timeout: 15000 
-    }).catch(() => {
-      console.log('Profile stats not found, continuing anyway');
-    });
-
-    // Get the page content
-    const html = await page.content();
-    const dom = new JSDOM(html);
-    const document = dom.window.document;
+    await handleTikTokPopups(page);
+    await page.waitForTimeout(3000);
     
-    return extractProfileData(document, username);
+    // Refresh the page after handling popups
+    console.log('Refreshing page after popup handling...');
+    await page.reload({ waitUntil: 'networkidle2', timeout: 30000 });
+    await page.waitForTimeout(5000); // Wait longer after refresh
+
+    // Try to extract data
+    let html = await page.content();
+    let dom = new JSDOM(html);
+    let document = dom.window.document;
+    
+    let profileData = extractProfileData(document, username);
+    
+    // If still empty after refresh, try one more time
+    if (isEmptyProfile(profileData)) {
+      console.log('Profile still empty, trying second refresh...');
+      await page.waitForTimeout(2000);
+      await page.reload({ waitUntil: 'networkidle2', timeout: 30000 });
+      await page.waitForTimeout(5000);
+      
+      html = await page.content();
+      dom = new JSDOM(html);
+      document = dom.window.document;
+      profileData = extractProfileData(document, username);
+    }
+
+    return profileData;
 
   } catch (error) {
-    console.error('Puppeteer error:', error);
+    console.error('Puppeteer with refresh error:', error);
     return null;
   } finally {
     if (browser) {
@@ -146,181 +171,138 @@ async function scrapeWithPuppeteer(username) {
   }
 }
 
-// Function to handle specific TikTok popups
-async function handleTikTokSpecificPopups(page) {
+// Improved popup handling function
+async function handleTikTokPopups(page) {
   try {
-    // Wait a bit for popups to appear
     await page.waitForTimeout(3000);
 
-    // 1. Handle "Nanti saja" button
+    // 1. Try to click "Nanti saja" button
     try {
-      const nantiSajaButton = await page.$('[data-e2e="alt-middle-cta-cancel-btn"]');
+      const nantiSajaButton = await page.waitForSelector('[data-e2e="alt-middle-cta-cancel-btn"]', { timeout: 2000 });
       if (nantiSajaButton) {
         await nantiSajaButton.click();
         console.log('Clicked "Nanti saja" button');
         await page.waitForTimeout(2000);
       }
     } catch (e) {
-      console.log('"Nanti saja" button not found or not clickable');
+      // Button not found, continue
     }
 
-    // 2. Handle close buttons (X icons)
+    // 2. Try to click close buttons (X)
     try {
-      // Target specific close buttons with SVG icons
-      const closeButtons = await page.$$eval('svg', (svgs) => {
-        return svgs
-          .filter(svg => {
-            const path = svg.querySelector('path');
-            return path && path.getAttribute('d') && path.getAttribute('d').includes('M21.1718');
-          })
-          .map(svg => {
-            // Find the closest button or clickable parent
-            let element = svg;
-            while (element && element !== document.body) {
-              if (element.tagName === 'BUTTON' || element.onclick || element.getAttribute('role') === 'button') {
-                return element;
-              }
-              element = element.parentElement;
-            }
-            return svg;
-          });
-      });
-
-      for (const closeButton of closeButtons) {
+      const closeButtons = await page.$$('button, div, span');
+      for (const button of closeButtons) {
         try {
-          await page.evaluate((element) => element.click(), closeButton);
-          console.log('Clicked X close button');
-          await page.waitForTimeout(1000);
-          break; // Stop after first successful close
+          const text = await page.evaluate(el => el.textContent, button);
+          const ariaLabel = await page.evaluate(el => el.getAttribute('aria-label'), button);
+          const className = await page.evaluate(el => el.className, button);
+          
+          if (
+            (text && (text.includes('×') || text === 'X' || text === 'x')) ||
+            (ariaLabel && (ariaLabel.includes('Close') || ariaLabel.includes('Tutup'))) ||
+            (className && (className.includes('close') || className.includes('modal-close')))
+          ) {
+            await button.click();
+            console.log('Clicked close button');
+            await page.waitForTimeout(1000);
+            break;
+          }
         } catch (e) {
           // Continue to next button
         }
       }
     } catch (e) {
-      console.log('X close buttons not found');
+      // Continue
     }
 
-    // 3. Handle other common TikTok popup selectors
-    const popupSelectors = [
-      '[data-e2e="modal-close-button"]',
-      '.tiktok-dialog-close',
-      '[aria-label="Close"]',
-      '.close-button',
-      '.modal-close',
-      'button:contains("Tutup")',
-      'button:contains("Close")',
-      'button:contains("Skip")',
-      'button:contains("Lewati")'
-    ];
-
-    for (const selector of popupSelectors) {
-      try {
-        const elements = await page.$$(selector);
-        for (const element of elements) {
-          try {
-            await element.click();
-            console.log(`Closed popup with selector: ${selector}`);
-            await page.waitForTimeout(1000);
-            break;
-          } catch (e) {
-            // Continue to next element
-          }
-        }
-      } catch (e) {
-        // Continue to next selector
-      }
-    }
-
-    // 4. Handle age verification
+    // 3. Try pressing Escape key
     try {
-      const ageVerify = await page.$('[data-e2e="age-verification-button"]');
-      if (ageVerify) {
-        await ageVerify.click();
-        console.log('Clicked age verification button');
-        await page.waitForTimeout(1000);
-      }
-    } catch (e) {
-      console.log('Age verification not found');
-    }
-
-    // 5. Handle login modal specifically
-    try {
-      const loginModal = await page.$('[data-e2e="login-modal"]');
-      if (loginModal) {
-        const closeLogin = await page.$('[data-e2e="login-modal-close-btn"]');
-        if (closeLogin) {
-          await closeLogin.click();
-          console.log('Closed login modal');
-          await page.waitForTimeout(1000);
-        }
-      }
-    } catch (e) {
-      console.log('Login modal not found');
-    }
-
-    // 6. Try to click anywhere to dismiss overlays (fallback)
-    try {
-      await page.mouse.click(10, 10);
-      console.log('Clicked corner to dismiss overlays');
+      await page.keyboard.press('Escape');
+      console.log('Pressed Escape key');
       await page.waitForTimeout(1000);
     } catch (e) {
-      // Ignore error
+      // Continue
+    }
+
+    // 4. Click on empty area to dismiss modals
+    try {
+      await page.mouse.click(100, 100);
+      console.log('Clicked empty area');
+      await page.waitForTimeout(1000);
+    } catch (e) {
+      // Continue
     }
 
   } catch (error) {
-    console.error('Error handling TikTok popups:', error);
+    console.error('Error in popup handling:', error);
   }
 }
 
 // Function to extract profile data from DOM
 function extractProfileData(document, username) {
-  // Extract following count
-  const followingElem = document.querySelector('[data-e2e="following-count"]');
-  const following = followingElem ? followingElem.textContent.trim() : '0';
+  try {
+    // Extract following count
+    const followingElem = document.querySelector('[data-e2e="following-count"]');
+    const following = followingElem ? followingElem.textContent.trim() : '0';
 
-  // Extract followers count
-  const followersElem = document.querySelector('[data-e2e="followers-count"]');
-  const followers = followersElem ? followersElem.textContent.trim() : '0';
+    // Extract followers count
+    const followersElem = document.querySelector('[data-e2e="followers-count"]');
+    const followers = followersElem ? followersElem.textContent.trim() : '0';
 
-  // Extract likes count
-  const likesElem = document.querySelector('[data-e2e="likes-count"]');
-  const likes = likesElem ? likesElem.textContent.trim() : '0';
+    // Extract likes count
+    const likesElem = document.querySelector('[data-e2e="likes-count"]');
+    const likes = likesElem ? likesElem.textContent.trim() : '0';
 
-  // Extract bio/description
-  const bioElem = document.querySelector('[data-e2e="user-bio"]');
-  const bio = bioElem ? bioElem.textContent.trim() : '';
+    // Extract bio/description
+    const bioElem = document.querySelector('[data-e2e="user-bio"]');
+    const bio = bioElem ? bioElem.textContent.trim() : '';
 
-  // Extract profile link
-  const linkElem = document.querySelector('[data-e2e="user-link"]');
-  const link = linkElem ? linkElem.href : '';
+    // Extract profile link
+    const linkElem = document.querySelector('[data-e2e="user-link"]');
+    const link = linkElem ? linkElem.href : '';
 
-  // Extract display name
-  const displayNameElem = document.querySelector('[data-e2e="user-title"]');
-  const displayName = displayNameElem ? displayNameElem.textContent.trim() : '';
+    // Extract display name
+    const displayNameElem = document.querySelector('[data-e2e="user-title"]');
+    const displayName = displayNameElem ? displayNameElem.textContent.trim() : '';
 
-  // Extract avatar
-  const avatarElem = document.querySelector('[data-e2e="user-avatar"]');
-  const avatar = avatarElem ? avatarElem.src : '';
+    // Extract avatar
+    const avatarElem = document.querySelector('[data-e2e="user-avatar"]');
+    const avatar = avatarElem ? avatarElem.src : '';
 
-  // Extract verified status
-  const verifiedElem = document.querySelector('[data-e2e="verified-icon"]');
-  const isVerified = !!verifiedElem;
+    // Extract verified status
+    const verifiedElem = document.querySelector('[data-e2e="verified-icon"]');
+    const isVerified = !!verifiedElem;
 
-  return {
-    username,
-    displayName,
-    following: formatCount(following),
-    followers: formatCount(followers),
-    likes: formatCount(likes),
-    bio,
-    link,
-    avatar,
-    isVerified,
-    profileUrl: `https://www.tiktok.com/@${username}`
-  };
+    return {
+      username,
+      displayName,
+      following: formatCount(following),
+      followers: formatCount(followers),
+      likes: formatCount(likes),
+      bio,
+      link,
+      avatar,
+      isVerified,
+      profileUrl: `https://www.tiktok.com/@${username}`
+    };
+  } catch (error) {
+    console.error('Error extracting profile data:', error);
+    return {
+      username,
+      displayName: '',
+      following: 0,
+      followers: 0,
+      likes: 0,
+      bio: '',
+      link: '',
+      avatar: '',
+      isVerified: false,
+      profileUrl: `https://www.tiktok.com/@${username}`
+    };
+  }
 }
 
-// Helper function to format count (convert K/M to numbers)
+// Helper function to format count
 function formatCount(count) {
   if (!count) return 0;
   
