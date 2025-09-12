@@ -119,12 +119,12 @@ async function scrapeWithPuppeteer(username) {
     // Navigate to page
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
 
-    // Check for challenge popups and close them
-    await handlePopupChallenges(page);
+    // Handle specific TikTok popups and challenges
+    await handleTikTokSpecificPopups(page);
 
     // Wait for profile data to load
     await page.waitForSelector('[data-e2e="followers-count"], [data-e2e="following-count"], [data-e2e="likes-count"]', { 
-      timeout: 10000 
+      timeout: 15000 
     }).catch(() => {
       console.log('Profile stats not found, continuing anyway');
     });
@@ -146,69 +146,129 @@ async function scrapeWithPuppeteer(username) {
   }
 }
 
-// Function to handle popup challenges (cookie consent, login modals, etc.)
-async function handlePopupChallenges(page) {
+// Function to handle specific TikTok popups
+async function handleTikTokSpecificPopups(page) {
   try {
     // Wait a bit for popups to appear
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
 
-    // Try to close various types of popups
+    // 1. Handle "Nanti saja" button
+    try {
+      const nantiSajaButton = await page.$('[data-e2e="alt-middle-cta-cancel-btn"]');
+      if (nantiSajaButton) {
+        await nantiSajaButton.click();
+        console.log('Clicked "Nanti saja" button');
+        await page.waitForTimeout(2000);
+      }
+    } catch (e) {
+      console.log('"Nanti saja" button not found or not clickable');
+    }
+
+    // 2. Handle close buttons (X icons)
+    try {
+      // Target specific close buttons with SVG icons
+      const closeButtons = await page.$$eval('svg', (svgs) => {
+        return svgs
+          .filter(svg => {
+            const path = svg.querySelector('path');
+            return path && path.getAttribute('d') && path.getAttribute('d').includes('M21.1718');
+          })
+          .map(svg => {
+            // Find the closest button or clickable parent
+            let element = svg;
+            while (element && element !== document.body) {
+              if (element.tagName === 'BUTTON' || element.onclick || element.getAttribute('role') === 'button') {
+                return element;
+              }
+              element = element.parentElement;
+            }
+            return svg;
+          });
+      });
+
+      for (const closeButton of closeButtons) {
+        try {
+          await page.evaluate((element) => element.click(), closeButton);
+          console.log('Clicked X close button');
+          await page.waitForTimeout(1000);
+          break; // Stop after first successful close
+        } catch (e) {
+          // Continue to next button
+        }
+      }
+    } catch (e) {
+      console.log('X close buttons not found');
+    }
+
+    // 3. Handle other common TikTok popup selectors
     const popupSelectors = [
-      'button[aria-label="Close"]',
-      'div[aria-label="Close"]',
-      '.close-button',
-      '.modal-close',
-      '.cookie-banner-close',
-      'button:has(svg.close)',
       '[data-e2e="modal-close-button"]',
       '.tiktok-dialog-close',
-      'div[class*="close"]',
-      'button[class*="close"]'
+      '[aria-label="Close"]',
+      '.close-button',
+      '.modal-close',
+      'button:contains("Tutup")',
+      'button:contains("Close")',
+      'button:contains("Skip")',
+      'button:contains("Lewati")'
     ];
 
     for (const selector of popupSelectors) {
       try {
-        const closeButton = await page.$(selector);
-        if (closeButton) {
-          await closeButton.click();
-          console.log(`Closed popup with selector: ${selector}`);
-          await page.waitForTimeout(1000);
+        const elements = await page.$$(selector);
+        for (const element of elements) {
+          try {
+            await element.click();
+            console.log(`Closed popup with selector: ${selector}`);
+            await page.waitForTimeout(1000);
+            break;
+          } catch (e) {
+            // Continue to next element
+          }
         }
       } catch (e) {
-        // Continue with next selector
+        // Continue to next selector
       }
     }
 
-    // Handle specific TikTok challenges
-    await handleTikTokSpecificChallenges(page);
-
-  } catch (error) {
-    console.error('Error handling popups:', error);
-  }
-}
-
-// Function to handle TikTok-specific challenges
-async function handleTikTokSpecificChallenges(page) {
-  try {
-    // Check for age verification
-    const ageVerify = await page.$('[data-e2e="age-verification-button"]');
-    if (ageVerify) {
-      await ageVerify.click();
-      await page.waitForTimeout(1000);
-    }
-
-    // Check for login modal
-    const loginModal = await page.$('[data-e2e="login-modal"]');
-    if (loginModal) {
-      const closeLogin = await page.$('[data-e2e="login-modal-close-btn"]');
-      if (closeLogin) {
-        await closeLogin.click();
+    // 4. Handle age verification
+    try {
+      const ageVerify = await page.$('[data-e2e="age-verification-button"]');
+      if (ageVerify) {
+        await ageVerify.click();
+        console.log('Clicked age verification button');
         await page.waitForTimeout(1000);
       }
+    } catch (e) {
+      console.log('Age verification not found');
+    }
+
+    // 5. Handle login modal specifically
+    try {
+      const loginModal = await page.$('[data-e2e="login-modal"]');
+      if (loginModal) {
+        const closeLogin = await page.$('[data-e2e="login-modal-close-btn"]');
+        if (closeLogin) {
+          await closeLogin.click();
+          console.log('Closed login modal');
+          await page.waitForTimeout(1000);
+        }
+      }
+    } catch (e) {
+      console.log('Login modal not found');
+    }
+
+    // 6. Try to click anywhere to dismiss overlays (fallback)
+    try {
+      await page.mouse.click(10, 10);
+      console.log('Clicked corner to dismiss overlays');
+      await page.waitForTimeout(1000);
+    } catch (e) {
+      // Ignore error
     }
 
   } catch (error) {
-    console.error('Error handling TikTok challenges:', error);
+    console.error('Error handling TikTok popups:', error);
   }
 }
 
@@ -272,5 +332,8 @@ function formatCount(count) {
   if (cleanCount.includes('M')) {
     return parseFloat(cleanCount.replace('M', '')) * 1000000;
   }
-  return parseInt(cleanCount) || 0;
+  if (cleanCount.includes('B')) {
+    return parseFloat(cleanCount.replace('B', '')) * 1000000000;
+  }
+  return parseInt(cleanCount.replace(/,/g, '')) || 0;
 }
