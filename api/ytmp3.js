@@ -1,7 +1,3 @@
-import cloudscraper from 'cloudscraper';
-import { JSDOM } from 'jsdom';
-import puppeteer from 'puppeteer';
-
 export default async function handler(request, response) {
   // Set CORS headers
   response.setHeader('Access-Control-Allow-Credentials', true);
@@ -35,17 +31,7 @@ export default async function handler(request, response) {
       return response.status(400).json({ success: false, error: 'URL tidak valid. Pastikan URL berasal dari YouTube.' });
     }
 
-    let result;
-    
-    try {
-      // First try with cloudscraper
-      result = await convertWithCloudscraper(url);
-    } catch (error) {
-      console.log('Cloudscraper failed, trying with Puppeteer...');
-      
-      // If cloudscraper fails, use Puppeteer as fallback
-      result = await convertWithPuppeteer(url);
-    }
+    const result = await convertWithFetch(url);
 
     return response.status(200).json({
       success: true,
@@ -74,83 +60,97 @@ export default async function handler(request, response) {
   }
 }
 
-// Convert using Cloudscraper - Updated for current ssvid.net
-async function convertWithCloudscraper(url) {
+// Convert using direct fetch requests
+async function convertWithFetch(youtubeUrl) {
   try {
-    // First, get the main page to get cookies and tokens
-    const initialResponse = await cloudscraper.get('https://ssvid.net/');
-    
-    // Extract the token from the page (if needed)
-    // For now, we'll directly use the API endpoints as observed
-    
-    // STEP 1: SEARCH - Get video info
-    const searchResponse = await cloudscraper.post({
-      uri: 'https://ssvid.net/api/ajaxSearch/index',
-      form: { 
-        q: url,
-        t: 'search'
-      },
+    // Step 1: Get initial page to obtain cookies
+    const initResponse = await fetch('https://ssvid.net/id4', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+      }
+    });
+
+    const cookies = initResponse.headers.get('set-cookie') || '';
+
+    // Step 2: Search for the video
+    const searchParams = new URLSearchParams();
+    searchParams.append('q', youtubeUrl);
+    searchParams.append('t', 'search');
+
+    const searchResponse = await fetch('https://ssvid.net/api/ajaxSearch/index', {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         'X-Requested-With': 'XMLHttpRequest',
         'Origin': 'https://ssvid.net',
-        'Referer': 'https://ssvid.net/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
+        'Referer': 'https://ssvid.net/id4',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Cookie': cookies,
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      body: searchParams.toString()
     });
 
-    const searchData = JSON.parse(searchResponse);
+    if (!searchResponse.ok) {
+      throw new Error(`Search request failed: ${searchResponse.status}`);
+    }
+
+    const searchData = await searchResponse.json();
     console.log('Search response:', searchData);
 
-    if (!searchData || !searchData.status || searchData.status !== 'ok') {
+    if (!searchData || searchData.status !== 'ok' || !searchData.vid) {
       throw new Error('Video tidak ditemukan di ssvid.net');
     }
 
-    // Get the video ID from the response
-    const vid = searchData.vid;
-    if (!vid) {
-      throw new Error('Video ID tidak ditemukan');
-    }
-
-    // Get token for m4a format
-    let format = "m4a";
+    // Step 3: Find audio format token
     let token = null;
-    
-    // Check if audio formats are available
+    let format = 'm4a';
+
     if (searchData.links && searchData.links.audio) {
-      // Look for M4A format
-      for (const [key, value] of Object.entries(searchData.links.audio)) {
-        if (key.includes('m4a') || value.k) {
-          token = value.k;
-          break;
-        }
+      // Look for M4A format (usually the first audio format)
+      const audioFormats = Object.values(searchData.links.audio);
+      if (audioFormats.length > 0 && audioFormats[0].k) {
+        token = audioFormats[0].k;
       }
     }
 
     if (!token) {
-      throw new Error("Token konversi untuk M4A tidak ditemukan.");
+      throw new Error("Token konversi untuk audio tidak ditemukan.");
     }
 
-    // STEP 2: CONVERT - Get download link
-    const convertResponse = await cloudscraper.post({
-      uri: 'https://ssvid.net/api/ajaxConvert/convert',
-      form: { 
-        vid: vid, 
-        k: token,
-        t: 'convert'
-      },
+    // Step 4: Convert to get download link
+    const convertParams = new URLSearchParams();
+    convertParams.append('vid', searchData.vid);
+    convertParams.append('k', token);
+    convertParams.append('t', 'convert');
+
+    const convertResponse = await fetch('https://ssvid.net/api/ajaxConvert/convert', {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         'X-Requested-With': 'XMLHttpRequest',
         'Origin': 'https://ssvid.net',
-        'Referer': 'https://ssvid.net/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
+        'Referer': 'https://ssvid.net/id4',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Cookie': cookies,
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      body: convertParams.toString()
     });
 
-    const convertData = JSON.parse(convertResponse);
+    if (!convertResponse.ok) {
+      throw new Error(`Convert request failed: ${convertResponse.status}`);
+    }
+
+    const convertData = await convertResponse.json();
     console.log('Convert response:', convertData);
-    
+
     if (!convertData || !convertData.durl) {
       throw new Error("Download link tidak ditemukan.");
     }
@@ -161,73 +161,9 @@ async function convertWithCloudscraper(url) {
       format: format,
       quality: "128kbps"
     };
-    
-  } catch (error) {
-    console.error('Cloudscraper conversion error:', error);
-    throw error;
-  }
-}
 
-// Convert using Puppeteer (fallback)
-async function convertWithPuppeteer(url) {
-  let browser;
-  try {
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-    
-    const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-    
-    // Navigate to ssvid.net
-    await page.goto('https://ssvid.net/', { 
-      waitUntil: 'networkidle2',
-      timeout: 30000
-    });
-    
-    // Input the URL
-    await page.type('#search__input', url);
-    
-    // Click the convert button
-    await page.click('#btn-start');
-    
-    // Wait for conversion to complete
-    await page.waitForSelector('#audio', { timeout: 60000 });
-    
-    // Click on audio tab
-    await page.click('#audio');
-    
-    // Wait for audio formats to load
-    await page.waitForSelector('.btn-orange', { timeout: 30000 });
-    
-    // Find and click the M4A convert button
-    const convertButtons = await page.$$('.btn-orange');
-    if (convertButtons.length > 0) {
-      await convertButtons[0].click();
-    }
-    
-    // Wait for download button to appear
-    await page.waitForSelector('a.btn-success[href*="dl"]', { timeout: 60000 });
-    
-    // Get download link
-    const downloadUrl = await page.$eval('a.btn-success', el => el.href);
-    
-    // Get title
-    const title = await page.title();
-    
-    await browser.close();
-    
-    return {
-      title: title.replace(' - SSvid.net', ''),
-      downloadUrl: downloadUrl,
-      format: "m4a",
-      quality: "128kbps"
-    };
-    
   } catch (error) {
-    if (browser) await browser.close();
-    console.error('Puppeteer conversion error:', error);
+    console.error('Fetch conversion error:', error);
     throw error;
   }
 }
