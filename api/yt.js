@@ -128,7 +128,7 @@ async function getDownloadLinksWithCloudscraper(videoId) {
         'Referer': 'https://id.savefrom.net/21-youtube-to-mp4-9eA.html',
         'Connection': 'keep-alive'
       },
-      timeout: 30000 // 30 second timeout
+      timeout: 30000
     });
 
     return parseDownloadLinks(response);
@@ -175,10 +175,13 @@ async function getDownloadLinksWithPuppeteer(videoId) {
 
     // Wait for results to load with timeout
     try {
-      await page.waitForSelector('.media-result', { timeout: 15000 });
+      await page.waitForSelector('.media-result', { timeout: 20000 });
     } catch (e) {
       console.log('Media result not found, continuing anyway');
     }
+
+    // Wait a bit more for dynamic content to load
+    await page.waitForTimeout(5000);
 
     // Get the page content
     const html = await page.content();
@@ -212,86 +215,151 @@ function parseDownloadLinks(html) {
     const dom = new JSDOM(html);
     const document = dom.window.document;
 
-    // Extract title
-    const titleElement = document.querySelector('.row.title');
+    // Extract title - improved selector
+    const titleElement = document.querySelector('.row.title') || 
+                         document.querySelector('[data-e2e="video-title"]') ||
+                         document.querySelector('h1') ||
+                         document.querySelector('title');
     if (titleElement) {
       result.title = titleElement.textContent.trim() || titleElement.getAttribute('title') || '';
+      // Clean up title
+      result.title = result.title.replace(' - YouTube', '').replace('YouTube', '').trim();
     }
 
-    // Extract duration
-    const durationElement = document.querySelector('.row.duration');
+    // Extract duration - improved selector
+    const durationElement = document.querySelector('.row.duration') || 
+                           document.querySelector('[data-e2e="video-duration"]');
     if (durationElement) {
       result.duration = durationElement.textContent.trim() || durationElement.getAttribute('title') || '';
     }
 
-    // Extract audio links (OPUS and M4A)
-    const audioLinks = document.querySelectorAll('a.link-download');
+    // Improved audio link extraction
+    const allLinks = document.querySelectorAll('a');
     
-    audioLinks.forEach(link => {
+    allLinks.forEach(link => {
       try {
-        const dataType = link.getAttribute('data-type') || '';
-        const dataQuality = link.getAttribute('data-quality') || '';
         const href = link.getAttribute('href') || '';
         const text = link.textContent.trim();
+        const className = link.getAttribute('class') || '';
+        const dataType = link.getAttribute('data-type') || '';
+        const dataQuality = link.getAttribute('data-quality') || '';
+        const title = link.getAttribute('title') || '';
 
-        if (dataType.includes('audio') && (dataType.includes('opus') || dataType.includes('m4a'))) {
+        // Check for audio links
+        if ((href.includes('googlevideo.com/videoplayback') || href.includes('videoplayback')) &&
+            (href.includes('mime=audio') || href.includes('itag=251') || href.includes('itag=250') || href.includes('itag=249') || href.includes('itag=140'))) {
+          
           const cleanUrl = cleanDownloadUrl(href);
+          
+          // Determine audio type and quality
+          let audioType = 'opus';
+          let quality = dataQuality || '128';
+          
+          if (href.includes('itag=140') || href.includes('mime=audio%2Fmp4')) {
+            audioType = 'm4a';
+          }
+          
+          if (title.includes('kb/s')) {
+            quality = title.match(/(\d+)\s*kb\/s/)?.[1] || quality;
+          } else if (dataQuality) {
+            quality = dataQuality;
+          }
+
           result.audios.push({
             url: cleanUrl,
-            quality: dataQuality + ' kb/s',
-            type: dataType.includes('opus') ? 'opus' : 'm4a',
-            label: text,
+            quality: quality + ' kb/s',
+            type: audioType,
+            label: text || `Audio ${audioType.toUpperCase()} ${quality}`,
             originalUrl: href
           });
         }
-      } catch (linkError) {
-        console.error('Error processing audio link:', linkError);
-      }
-    });
 
-    // Extract video links
-    const videoLinks = document.querySelectorAll('a.link:not(.link-download)');
-    
-    videoLinks.forEach(link => {
-      try {
-        const dataType = link.getAttribute('data-type') || '';
-        const dataQuality = link.getAttribute('data-quality') || '';
-        const href = link.getAttribute('href') || '';
-        const text = link.textContent.trim();
-
-        if (dataType.includes('mp4') && !dataType.includes('dash') && !dataType.includes('without audio')) {
+        // Check for video links
+        if ((href.includes('googlevideo.com/videoplayback') || href.includes('videoplayback')) &&
+            (href.includes('mime=video') || href.includes('itag=18') || href.includes('itag=22'))) {
+          
           const cleanUrl = cleanDownloadUrl(href);
+          
+          // Determine video quality
+          let quality = dataQuality || '720';
+          if (title.includes('p')) {
+            quality = title.match(/(\d+)\s*p/)?.[1] || quality;
+          } else if (dataQuality) {
+            quality = dataQuality;
+          }
+
           result.videos.push({
             url: cleanUrl,
-            quality: dataQuality + 'p',
+            quality: quality + 'p',
             type: 'mp4',
-            label: text,
+            label: text || `MP4 ${quality}p`,
             originalUrl: href
           });
         }
+
       } catch (linkError) {
-        console.error('Error processing video link:', linkError);
+        console.error('Error processing link:', linkError);
       }
     });
 
-    // If no audio links found with class, try alternative parsing
+    // Alternative parsing using regex for audio links
     if (result.audios.length === 0) {
-      try {
-        const audioRegex = /<a[^>]*data-type="[^"]*audio[^"]*"[^>]*href="([^"]*)"[^>]*data-quality="([^"]*)"[^>]*>([^<]*)<\/a>/g;
-        let match;
-        
-        while ((match = audioRegex.exec(html)) !== null) {
+      const audioRegex = /<a[^>]*href="([^"]*videoplayback[^"]*)"[^>]*data-type="[^"]*audio[^"]*"[^>]*data-quality="([^"]*)"[^>]*>([^<]*)<\/a>/gi;
+      let match;
+      
+      while ((match = audioRegex.exec(html)) !== null) {
+        try {
           const cleanUrl = cleanDownloadUrl(match[1]);
           result.audios.push({
             url: cleanUrl,
             quality: match[2] + ' kb/s',
-            type: 'opus',
+            type: match[1].includes('m4a') ? 'm4a' : 'opus',
             label: match[3].trim(),
             originalUrl: match[1]
           });
+        } catch (e) {
+          console.error('Error with regex audio parsing:', e);
         }
-      } catch (regexError) {
-        console.error('Error with regex parsing:', regexError);
+      }
+    }
+
+    // Alternative parsing using regex for video links
+    if (result.videos.length === 0) {
+      const videoRegex = /<a[^>]*href="([^"]*videoplayback[^"]*)"[^>]*data-type="[^"]*mp4[^"]*"[^>]*data-quality="([^"]*)"[^>]*>([^<]*)<\/a>/gi;
+      let match;
+      
+      while ((match = videoRegex.exec(html)) !== null) {
+        try {
+          const cleanUrl = cleanDownloadUrl(match[1]);
+          result.videos.push({
+            url: cleanUrl,
+            quality: match[2] + 'p',
+            type: 'mp4',
+            label: match[3].trim(),
+            originalUrl: match[1]
+          });
+        } catch (e) {
+          console.error('Error with regex video parsing:', e);
+        }
+      }
+    }
+
+    // If still no audio links, try to find any audio URLs in the page
+    if (result.audios.length === 0) {
+      const audioUrlRegex = /https:\/\/[^"']*googlevideo\.com[^"']*videoplayback[^"']*(itag=25[01]|mime=audio[^"']*)/gi;
+      const audioMatches = html.match(audioUrlRegex);
+      
+      if (audioMatches) {
+        audioMatches.forEach(url => {
+          const cleanUrl = cleanDownloadUrl(url);
+          result.audios.push({
+            url: cleanUrl,
+            quality: '128 kb/s',
+            type: url.includes('m4a') ? 'm4a' : 'opus',
+            label: 'Audio Download',
+            originalUrl: url
+          });
+        });
       }
     }
 
@@ -302,7 +370,7 @@ function parseDownloadLinks(html) {
   return result;
 }
 
-// Function to clean download URL (remove tracking and get direct URL)
+// Function to clean download URL
 function cleanDownloadUrl(url) {
   if (!url) return '';
 
@@ -310,11 +378,15 @@ function cleanDownloadUrl(url) {
     // Handle URL encoding
     let cleanUrl = decodeURIComponent(url);
     
-    // Remove tracking parameters
+    // Remove tracking parameters but keep essential ones
     const urlObj = new URL(cleanUrl);
     
-    // Keep only essential parameters
-    const essentialParams = ['expire', 'ei', 'ip', 'id', 'itag', 'source', 'requiressl', 'mime', 'clen', 'dur', 'lmt'];
+    // Essential parameters for video/audio playback
+    const essentialParams = [
+      'expire', 'ei', 'ip', 'id', 'itag', 'source', 'requiressl',
+      'mime', 'clen', 'dur', 'lmt', 'gir', 'ratebypass'
+    ];
+    
     const newParams = new URLSearchParams();
     
     for (const param of essentialParams) {
