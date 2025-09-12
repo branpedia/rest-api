@@ -1,3 +1,7 @@
+import cloudscraper from 'cloudscraper';
+import { JSDOM } from 'jsdom';
+import puppeteer from 'puppeteer';
+
 // API YouTube to MP3 Converter
 // Endpoint: GET /api/ytmp3?url=[youtube_url]
 
@@ -35,10 +39,15 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Could not extract video ID from URL' });
     }
 
-    // Get download links from SaveFrom.net
-    const downloadLinks = await getDownloadLinks(videoId);
+    // Get download links using multiple methods
+    let downloadLinks = await getDownloadLinksWithCloudscraper(videoId);
+    
+    // If cloudscraper fails, use puppeteer
+    if (!downloadLinks || downloadLinks.audios.length === 0) {
+      downloadLinks = await getDownloadLinksWithPuppeteer(videoId);
+    }
 
-    if (!downloadLinks || downloadLinks.length === 0) {
+    if (!downloadLinks || downloadLinks.audios.length === 0) {
       return res.status(404).json({ error: 'No download links found' });
     }
 
@@ -50,7 +59,7 @@ export default async function handler(req, res) {
         duration: downloadLinks.duration || '0:00',
         thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
         downloads: downloadLinks.audios,
-        videos: downloadLinks.videos
+        videos: downloadLinks.videos || []
       }
     });
 
@@ -80,60 +89,87 @@ function extractVideoId(url) {
   return null;
 }
 
-// Function to get download links from SaveFrom.net
-async function getDownloadLinks(videoId) {
-  const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
-  const saveFromUrl = 'https://id.savefrom.net/21-youtube-to-mp4-9eA.html';
-
+// Function to get download links using Cloudscraper
+async function getDownloadLinksWithCloudscraper(videoId) {
   try {
-    // First, get the initial page to get cookies
-    const initialResponse = await fetch(saveFromUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'id-ID,id;q=0.9,en;q=0.8',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1'
-      }
-    });
+    const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const saveFromUrl = 'https://id.savefrom.net/21-youtube-to-mp4-9eA.html';
 
-    const cookies = initialResponse.headers.get('set-cookie') || '';
-    
-    // Create form data for the request
-    const formData = new URLSearchParams();
-    formData.append('sf_url', youtubeUrl);
-    formData.append('sf_submit', '');
-
-    // Submit the form to get download links
-    const response = await fetch('https://id.savefrom.net/21-youtube-to-mp4-9eA.html', {
-      method: 'POST',
+    // Use cloudscraper to bypass protection
+    const response = await cloudscraper.post(saveFromUrl, {
+      form: {
+        sf_url: youtubeUrl,
+        sf_submit: ''
+      },
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Cookie': cookies,
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'id-ID,id;q=0.9,en;q=0.8',
         'Origin': 'https://id.savefrom.net',
         'Referer': 'https://id.savefrom.net/21-youtube-to-mp4-9eA.html',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1'
-      },
-      body: formData.toString()
+        'Connection': 'keep-alive'
+      }
     });
 
-    const html = await response.text();
-    
-    // Parse the HTML to extract download links
-    return parseDownloadLinks(html);
+    return parseDownloadLinks(response);
 
   } catch (error) {
-    console.error('Error getting download links:', error);
-    throw error;
+    console.error('Cloudscraper error:', error);
+    return null;
   }
 }
 
-// Function to parse download links from HTML
+// Function to get download links using Puppeteer
+async function getDownloadLinksWithPuppeteer(videoId) {
+  let browser = null;
+  try {
+    const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const saveFromUrl = 'https://id.savefrom.net/21-youtube-to-mp4-9eA.html';
+
+    browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-web-security',
+        '--window-size=1920,1080'
+      ]
+    });
+
+    const page = await browser.newPage();
+    
+    // Set user agent and viewport
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+    await page.setViewport({ width: 1920, height: 1080 });
+
+    // Navigate to SaveFrom.net
+    await page.goto(saveFromUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+
+    // Fill the form and submit
+    await page.type('#sf_url', youtubeUrl);
+    await page.click('#sf_submit');
+
+    // Wait for results to load
+    await page.waitForSelector('.media-result', { timeout: 15000 }).catch(() => {
+      console.log('Media result not found, continuing anyway');
+    });
+
+    // Get the page content
+    const html = await page.content();
+    
+    return parseDownloadLinks(html);
+
+  } catch (error) {
+    console.error('Puppeteer error:', error);
+    return null;
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
+  }
+}
+
+// Improved function to parse download links from HTML
 function parseDownloadLinks(html) {
   const result = {
     title: '',
@@ -143,67 +179,86 @@ function parseDownloadLinks(html) {
   };
 
   try {
+    const dom = new JSDOM(html);
+    const document = dom.window.document;
+
     // Extract title
-    const titleMatch = html.match(/<div class="row title"[^>]*title="([^"]*)"/);
-    if (titleMatch) {
-      result.title = titleMatch[1];
+    const titleElement = document.querySelector('.row.title');
+    if (titleElement) {
+      result.title = titleElement.textContent.trim() || titleElement.getAttribute('title') || '';
     }
 
     // Extract duration
-    const durationMatch = html.match(/<div class="row duration"[^>]*title="([^"]*)"/);
-    if (durationMatch) {
-      result.duration = durationMatch[1];
+    const durationElement = document.querySelector('.row.duration');
+    if (durationElement) {
+      result.duration = durationElement.textContent.trim() || durationElement.getAttribute('title') || '';
     }
 
     // Extract audio links (OPUS and M4A)
-    const audioRegex = /<a[^>]*class="[^"]*link-download[^"]*"[^>]*data-quality="([^"]*)"[^>]*data-type="([^"]*)"[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/g;
-    let match;
+    const audioLinks = document.querySelectorAll('a.link-download');
     
-    while ((match = audioRegex.exec(html)) !== null) {
-      const quality = match[1];
-      const type = match[2];
-      const url = match[3];
-      const label = match[4].trim();
+    audioLinks.forEach(link => {
+      const dataType = link.getAttribute('data-type') || '';
+      const dataQuality = link.getAttribute('data-quality') || '';
+      const href = link.getAttribute('href') || '';
+      const text = link.textContent.trim();
 
-      if (type.includes('audio') && (type.includes('opus') || type.includes('m4a'))) {
+      if (dataType.includes('audio') && (dataType.includes('opus') || dataType.includes('m4a'))) {
+        const cleanUrl = cleanDownloadUrl(href);
         result.audios.push({
-          url: decodeURIComponent(url),
-          quality: quality + ' kb/s',
-          type: type.includes('opus') ? 'opus' : 'm4a',
-          label: label
+          url: cleanUrl,
+          quality: dataQuality + ' kb/s',
+          type: dataType.includes('opus') ? 'opus' : 'm4a',
+          label: text,
+          originalUrl: href
         });
       }
-    }
+    });
 
     // Extract video links
-    const videoRegex = /<a[^>]*class="[^"]*link[^"]*"[^>]*data-quality="([^"]*)"[^>]*data-type="([^"]*)"[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/g;
+    const videoLinks = document.querySelectorAll('a.link:not(.link-download)');
     
-    while ((match = videoRegex.exec(html)) !== null) {
-      const quality = match[1];
-      const type = match[2];
-      const url = match[3];
-      const label = match[4].trim();
+    videoLinks.forEach(link => {
+      const dataType = link.getAttribute('data-type') || '';
+      const dataQuality = link.getAttribute('data-quality') || '';
+      const href = link.getAttribute('href') || '';
+      const text = link.textContent.trim();
 
-      if (type.includes('mp4') && !type.includes('dash') && !type.includes('without audio')) {
+      if (dataType.includes('mp4') && !dataType.includes('dash') && !dataType.includes('without audio')) {
+        const cleanUrl = cleanDownloadUrl(href);
         result.videos.push({
-          url: decodeURIComponent(url),
-          quality: quality + 'p',
+          url: cleanUrl,
+          quality: dataQuality + 'p',
           type: 'mp4',
-          label: label
+          label: text,
+          originalUrl: href
+        });
+      }
+    });
+
+    // If no audio links found with class, try alternative parsing
+    if (result.audios.length === 0) {
+      const alternativeAudioLinks = html.match(/<a[^>]*data-type="[^"]*audio[^"]*"[^>]*href="([^"]*)"[^>]*data-quality="([^"]*)"[^>]*>([^<]*)<\/a>/g);
+      
+      if (alternativeAudioLinks) {
+        alternativeAudioLinks.forEach(linkHtml => {
+          const hrefMatch = linkHtml.match(/href="([^"]*)"/);
+          const qualityMatch = linkHtml.match(/data-quality="([^"]*)"/);
+          const textMatch = linkHtml.match/>([^<]*)<\/a>/);
+          
+          if (hrefMatch && qualityMatch && textMatch) {
+            const cleanUrl = cleanDownloadUrl(hrefMatch[1]);
+            result.audios.push({
+              url: cleanUrl,
+              quality: qualityMatch[1] + ' kb/s',
+              type: 'opus',
+              label: textMatch[1].trim(),
+              originalUrl: hrefMatch[1]
+            });
+          }
         });
       }
     }
-
-    // Clean up URLs (remove tracking parameters)
-    result.audios = result.audios.map(audio => ({
-      ...audio,
-      url: cleanUrl(audio.url)
-    }));
-
-    result.videos = result.videos.map(video => ({
-      ...video,
-      url: cleanUrl(video.url)
-    }));
 
   } catch (error) {
     console.error('Error parsing download links:', error);
@@ -212,22 +267,33 @@ function parseDownloadLinks(html) {
   return result;
 }
 
-// Function to clean URL from tracking parameters
-function cleanUrl(url) {
-  try {
-    const urlObj = new URL(url);
-    // Remove common tracking parameters
-    const blacklistedParams = [
-      'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
-      'ga_track_events', 'data-ga-event', 'sig', 'lsig', 'sparams', 'lsparams'
-    ];
-    
-    blacklistedParams.forEach(param => {
-      urlObj.searchParams.delete(param);
-    });
+// Function to clean download URL (remove tracking and get direct URL)
+function cleanDownloadUrl(url) {
+  if (!url) return '';
 
-    return urlObj.toString();
-  } catch {
+  try {
+    // Handle URL encoding
+    let cleanUrl = decodeURIComponent(url);
+    
+    // Remove tracking parameters
+    const urlObj = new URL(cleanUrl);
+    
+    // Keep only essential parameters
+    const essentialParams = ['expire', 'ei', 'ip', 'id', 'itag', 'source', 'requiressl', 'mime', 'clen', 'dur', 'lmt'];
+    const newParams = new URLSearchParams();
+    
+    for (const param of essentialParams) {
+      const value = urlObj.searchParams.get(param);
+      if (value) {
+        newParams.set(param, value);
+      }
+    }
+    
+    // Rebuild URL with essential parameters only
+    return `${urlObj.origin}${urlObj.pathname}?${newParams.toString()}`;
+    
+  } catch (error) {
+    console.error('Error cleaning URL:', error);
     return url;
   }
 }
