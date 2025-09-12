@@ -1,6 +1,4 @@
-import cloudscraper from 'cloudscraper';
-import { JSDOM } from 'jsdom';
-import puppeteer from 'puppeteer';
+import axios from 'axios';
 
 export default async function handler(request, response) {
   // Set CORS headers
@@ -35,18 +33,8 @@ export default async function handler(request, response) {
       return response.status(400).json({ success: false, error: 'URL tidak valid. Pastikan URL berasal dari YouTube.' });
     }
 
-    let result;
+    let result = await convertWithAxios(url);
     
-    try {
-      // First try with cloudscraper
-      result = await convertWithCloudscraper(url);
-    } catch (error) {
-      console.log('Cloudscraper failed, trying with Puppeteer...');
-      
-      // If cloudscraper fails, use Puppeteer as fallback
-      result = await convertWithPuppeteer(url);
-    }
-
     return response.status(200).json({
       success: true,
       data: {
@@ -62,7 +50,6 @@ export default async function handler(request, response) {
     
     // Retry logic
     if (retry < 3) {
-      // Wait for 1 second before retrying
       await new Promise(resolve => setTimeout(resolve, 1000));
       return handler({ ...request, query: { ...request.query, retry: parseInt(retry) + 1 } }, response);
     }
@@ -74,89 +61,136 @@ export default async function handler(request, response) {
   }
 }
 
-// Convert using Cloudscraper - FIXED VERSION
-async function convertWithCloudscraper(url) {
+// Convert using Axios only
+async function convertWithAxios(youtubeUrl) {
   try {
-    // STEP 1: SEARCH - Get video info
-    const searchResponse = await cloudscraper.post({
-      uri: 'https://ssvid.net/api/search',
-      form: { 
-        q: url,
-        t: 'search' // Added based on the console log
-      },
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Origin': 'https://ssvid.net',
-        'Referer': 'https://ssvid.net/'
+    // Step 1: Search for the video
+    const searchResponse = await axios.post('https://ssvid.net/api/search', 
+      `q=${encodeURIComponent(youtubeUrl)}&t=search`,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Requested-With': 'XMLHttpRequest',
+          'Origin': 'https://ssvid.net',
+          'Referer': 'https://ssvid.net/',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
       }
-    });
+    );
 
-    const searchData = JSON.parse(searchResponse);
-    console.log('Search response:', searchData);
-
+    const searchData = searchResponse.data;
+    
     if (!searchData || !searchData.data || !searchData.data.vid) {
-      throw new Error('Video tidak ditemukan di ssvid.net');
+      throw new Error('Video tidak ditemukan');
     }
 
     const vid = searchData.data.vid;
     const title = searchData.data.title;
 
-    // Get token for m4a (audio)
-    // Based on the HTML, we need to extract the token from the onclick attribute
-    // The format is: startConvert('m4a','i/tVG6MuyJLMHjHHt+soTBTEBnMBauP8SBw/GpGQma9wEVTp5Z2sAi1VPeGCidgpb8JIcOqVMFY=')
-    
-    // Since we can't easily parse the HTML with cloudscraper, let's try a different approach
-    // We'll use the API endpoint that handles conversion
+    // Step 2: Try to convert to M4A first
+    try {
+      const convertResponse = await axios.post('https://ssvid.net/api/convert', 
+        `vid=${vid}&k=m4a&t=convert`,
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Origin': 'https://ssvid.net',
+            'Referer': `https://ssvid.net/id/${vid}`,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+          }
+        }
+      );
 
-    // STEP 2: CONVERT - Get download link for M4A
-    const convertResponse = await cloudscraper.post({
-      uri: 'https://ssvid.net/api/convert',
-      form: { 
-        vid: vid,
-        k: 'm4a', // Request M4A format
-        t: 'convert'
-      },
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Origin': 'https://ssvid.net',
-        'Referer': 'https://ssvid.net/'
+      const convertData = convertResponse.data;
+      
+      if (convertData && convertData.data && convertData.data.dlink) {
+        return {
+          title: title,
+          downloadUrl: convertData.data.dlink,
+          format: "m4a",
+          quality: "128kbps"
+        };
       }
-    });
+    } catch (m4aError) {
+      console.log('M4A conversion failed, trying MP3...');
+    }
 
-    const convertData = JSON.parse(convertResponse);
-    console.log('Convert response:', convertData);
-    
-    if (!convertData || !convertData.data || !convertData.data.dlink) {
-      // Try MP3 as fallback
-      const mp3Response = await cloudscraper.post({
-        uri: 'https://ssvid.net/api/convert',
-        form: { 
-          vid: vid,
-          k: 'mp3', // Request MP3 format
-          t: 'convert'
-        },
+    // Step 3: If M4A fails, try MP3
+    const mp3Response = await axios.post('https://ssvid.net/api/convert', 
+      `vid=${vid}&k=mp3&t=convert`,
+      {
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'Content-Type': 'application/x-www-form-urlencoded',
           'X-Requested-With': 'XMLHttpRequest',
           'Origin': 'https://ssvid.net',
-          'Referer': 'https://ssvid.net/'
+          'Referer': `https://ssvid.net/id/${vid}`,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
-      });
-
-      const mp3Data = JSON.parse(mp3Response);
-      
-      if (!mp3Data || !mp3Data.data || !mp3Data.data.dlink) {
-        throw new Error("Download link tidak ditemukan.");
       }
+    );
 
-      return {
-        title: title,
-        downloadUrl: mp3Data.data.dlink,
-        format: "mp3",
-        quality: "128kbps"
-      };
+    const mp3Data = mp3Response.data;
+    
+    if (!mp3Data || !mp3Data.data || !mp3Data.data.dlink) {
+      throw new Error("Download link tidak ditemukan.");
+    }
+
+    return {
+      title: title,
+      downloadUrl: mp3Data.data.dlink,
+      format: "mp3",
+      quality: "128kbps"
+    };
+
+  } catch (error) {
+    console.error('Axios conversion error:', error.response?.data || error.message);
+    throw error;
+  }
+}
+
+// Alternative: Using fetch instead of axios
+async function convertWithFetch(youtubeUrl) {
+  try {
+    // Step 1: Search for the video
+    const searchResponse = await fetch('https://ssvid.net/api/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Origin': 'https://ssvid.net',
+        'Referer': 'https://ssvid.net/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      },
+      body: `q=${encodeURIComponent(youtubeUrl)}&t=search`
+    });
+
+    const searchData = await searchResponse.json();
+    
+    if (!searchData || !searchData.data || !searchData.data.vid) {
+      throw new Error('Video tidak ditemukan');
+    }
+
+    const vid = searchData.data.vid;
+    const title = searchData.data.title;
+
+    // Step 2: Convert to audio
+    const convertResponse = await fetch('https://ssvid.net/api/convert', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Origin': 'https://ssvid.net',
+        'Referer': `https://ssvid.net/id/${vid}`,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      },
+      body: `vid=${vid}&k=m4a&t=convert`
+    });
+
+    const convertData = await convertResponse.json();
+    
+    if (!convertData || !convertData.data || !convertData.data.dlink) {
+      throw new Error("Download link tidak ditemukan.");
     }
 
     return {
@@ -165,162 +199,9 @@ async function convertWithCloudscraper(url) {
       format: "m4a",
       quality: "128kbps"
     };
-    
+
   } catch (error) {
-    console.error('Cloudscraper conversion error:', error);
-    throw error;
-  }
-}
-
-// ALTERNATIVE: Parse the HTML to extract tokens (more reliable)
-async function convertWithHTMLParsing(url) {
-  try {
-    // First, get the search page to extract tokens
-    const searchPage = await cloudscraper.get({
-      uri: 'https://ssvid.net/',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    });
-
-    // Then submit the search form
-    const searchResponse = await cloudscraper.post({
-      uri: 'https://ssvid.net/api/search',
-      form: { 
-        q: url,
-        t: 'search'
-      },
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Origin': 'https://ssvid.net',
-        'Referer': 'https://ssvid.net/'
-      }
-    });
-
-    const searchData = JSON.parse(searchResponse);
-    
-    if (!searchData || !searchData.data || !searchData.data.vid) {
-      throw new Error('Video tidak ditemukan');
-    }
-
-    // Now get the conversion page to extract tokens from HTML
-    const resultPage = await cloudscraper.get({
-      uri: `https://ssvid.net/id/${searchData.data.vid}`,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    });
-
-    // Parse HTML to extract conversion tokens
-    const dom = new JSDOM(resultPage);
-    const document = dom.window.document;
-    
-    // Find M4A conversion button and extract token
-    const m4aButtons = document.querySelectorAll('button[onclick*="startConvert(\'m4a\'"]');
-    let m4aToken = null;
-    
-    if (m4aButtons.length > 0) {
-      const onclick = m4aButtons[0].getAttribute('onclick');
-      const match = onclick.match(/startConvert\('m4a','([^']+)'\)/);
-      if (match && match[1]) {
-        m4aToken = match[1];
-      }
-    }
-
-    if (m4aToken) {
-      const convertResponse = await cloudscraper.post({
-        uri: 'https://ssvid.net/api/convert',
-        form: { 
-          vid: searchData.data.vid,
-          k: m4aToken,
-          t: 'convert'
-        },
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-          'X-Requested-With': 'XMLHttpRequest',
-          'Origin': 'https://ssvid.net',
-          'Referer': `https://ssvid.net/id/${searchData.data.vid}`
-        }
-      });
-
-      const convertData = JSON.parse(convertResponse);
-      
-      if (convertData && convertData.data && convertData.data.dlink) {
-        return {
-          title: searchData.data.title,
-          downloadUrl: convertData.data.dlink,
-          format: "m4a",
-          quality: "128kbps"
-        };
-      }
-    }
-
-    throw new Error("Tidak dapat mendapatkan link download");
-    
-  } catch (error) {
-    console.error('HTML parsing conversion error:', error);
-    throw error;
-  }
-}
-
-// Convert using Puppeteer (fallback) - UPDATED
-async function convertWithPuppeteer(url) {
-  let browser;
-  try {
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-    
-    const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-    
-    // Navigate to ssvid.net instead of ytmp3.cc
-    await page.goto('https://ssvid.net/', { 
-      waitUntil: 'networkidle2',
-      timeout: 30000
-    });
-    
-    // Input the URL
-    await page.type('#search__input', url);
-    
-    // Click the convert button
-    await page.click('#btn-start');
-    
-    // Wait for conversion to complete
-    await page.waitForSelector('#audio', { timeout: 60000 });
-    
-    // Wait a bit more for the conversion to finish
-    await page.waitForTimeout(3000);
-    
-    // Click on the M4A download button
-    const downloadButton = await page.$('button[onclick*="startConvert(\'m4a\'"]');
-    if (downloadButton) {
-      await downloadButton.click();
-      
-      // Wait for download link to appear
-      await page.waitForSelector('a.btn-success[download]', { timeout: 30000 });
-      
-      // Get download link and title
-      const downloadUrl = await page.$eval('a.btn-success[download]', el => el.href);
-      const title = await page.$eval('h2.video-title', el => el.textContent.trim());
-      
-      await browser.close();
-      
-      return {
-        title: title,
-        downloadUrl: downloadUrl,
-        format: "m4a",
-        quality: "128kbps"
-      };
-    }
-    
-    throw new Error("Download button not found");
-    
-  } catch (error) {
-    if (browser) await browser.close();
-    console.error('Puppeteer conversion error:', error);
+    console.error('Fetch conversion error:', error);
     throw error;
   }
 }
