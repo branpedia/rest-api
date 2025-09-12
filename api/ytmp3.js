@@ -1,6 +1,5 @@
-import cloudscraper from 'cloudscraper';
-import { JSDOM } from 'jsdom';
 import puppeteer from 'puppeteer';
+import cloudscraper from 'cloudscraper';
 
 export default async function handler(request, response) {
   // Set CORS headers
@@ -31,7 +30,7 @@ export default async function handler(request, response) {
 
   try {
     // Validate YouTube URL
-    const ytRegex = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})$/;
+    const ytRegex = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
     if (!ytRegex.test(url)) {
       return response.status(400).json({ success: false, error: 'URL YouTube tidak valid. Format yang benar: https://www.youtube.com/watch?v=VIDEO_ID' });
     }
@@ -39,13 +38,13 @@ export default async function handler(request, response) {
     let result;
     
     try {
-      // First try with cloudscraper
-      result = await convertWithCloudscraper(url);
-    } catch (error) {
-      console.log('Cloudscraper failed, trying with Puppeteer...');
-      
-      // If cloudscraper fails, use Puppeteer as fallback
+      // Try with direct scraping using Puppeteer
       result = await convertWithPuppeteer(url);
+    } catch (error) {
+      console.log('Direct scraping failed, trying alternative method...');
+      
+      // If direct scraping fails, try alternative service
+      result = await convertWithAlternativeService(url);
     }
 
     return response.status(200).json({
@@ -54,7 +53,9 @@ export default async function handler(request, response) {
         title: result.title,
         downloadUrl: result.downloadUrl,
         format: result.format,
-        quality: result.quality || '128kbps'
+        quality: result.quality || '128kbps',
+        duration: result.duration,
+        thumbnail: result.thumbnail
       }
     });
 
@@ -62,7 +63,7 @@ export default async function handler(request, response) {
     console.error('Error in YouTube to MP3 converter:', error);
     
     // Retry logic
-    if (retry < 3) {
+    if (retry < 2) {
       // Wait for 1 second before retrying
       await new Promise(resolve => setTimeout(resolve, 1000));
       return handler({ ...request, query: { ...request.query, retry: parseInt(retry) + 1 } }, response);
@@ -75,191 +76,187 @@ export default async function handler(request, response) {
   }
 }
 
-// Convert using Cloudscraper - Updated to work with current ssvid.net
-async function convertWithCloudscraper(url) {
-  try {
-    // First, get the main page to obtain cookies and bypass protection
-    await cloudscraper.get('https://ssvid.net');
-    
-    // STEP 1: SEARCH - Get video info
-    const searchResponse = await cloudscraper.post({
-      uri: 'https://ssvid.net/api/ajaxSearch/index',
-      form: { 
-        query: url,
-        _: Date.now() // Add timestamp to avoid caching
-      },
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Origin': 'https://ssvid.net',
-        'Referer': 'https://ssvid.net/',
-        'Accept': 'application/json, text/javascript, */*; q=0.01',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br',
-      }
-    });
-
-    const searchData = JSON.parse(searchResponse);
-
-    if (!searchData || !searchData.data) {
-      throw new Error('Video tidak ditemukan di ssvid.net');
-    }
-
-    // Extract video ID and title
-    const vid = searchData.data.vid;
-    const title = searchData.data.title;
-
-    if (!vid) {
-      throw new Error('Video ID tidak ditemukan');
-    }
-
-    // Get token for mp3 (preferred) or m4a
-    let format = "mp3";
-    let token = searchData.data.links?.mp3?.["128"]?.k;
-
-    if (!token) {
-      format = "m4a";
-      token = searchData.data.links?.m4a?.["140"]?.k;
-    }
-
-    if (!token) {
-      // If no token found, try to find any available format
-      const availableFormats = Object.keys(searchData.data.links || {});
-      if (availableFormats.length > 0) {
-        const firstFormat = availableFormats[0];
-        const firstQuality = Object.keys(searchData.data.links[firstFormat] || {})[0];
-        token = searchData.data.links[firstFormat][firstQuality]?.k;
-        format = firstFormat;
-      }
-    }
-
-    if (!token) {
-      throw new Error("Token konversi tidak ditemukan.");
-    }
-
-    // STEP 2: CONVERT - Get download link
-    const convertResponse = await cloudscraper.post({
-      uri: 'https://ssvid.net/api/ajaxConvert/convert',
-      form: { 
-        vid, 
-        k: token,
-        _: Date.now() // Add timestamp
-      },
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Origin': 'https://ssvid.net',
-        'Referer': 'https://ssvid.net/',
-        'Accept': 'application/json, text/javascript, */*; q=0.01'
-      }
-    });
-
-    const convertData = JSON.parse(convertResponse);
-    
-    if (!convertData || !convertData.url) {
-      throw new Error("Download link tidak ditemukan.");
-    }
-
-    return {
-      title: title || "YouTube Audio",
-      downloadUrl: convertData.url,
-      format: format,
-      quality: format === "mp3" ? "128kbps" : "140kbps"
-    };
-    
-  } catch (error) {
-    console.error('Cloudscraper conversion error:', error);
-    throw error;
-  }
-}
-
-// Convert using Puppeteer (fallback) - Updated to use y2mate.guru
-async function convertWithPuppeteer(url) {
+// Convert using Puppeteer - Direct scraping approach
+async function convertWithPuppeteer(youtubeUrl) {
   let browser;
   try {
+    // Launch browser with appropriate options
     browser = await puppeteer.launch({
-      headless: 'new',
+      headless: true,
       args: [
-        '--no-sandbox', 
+        '--no-sandbox',
         '--disable-setuid-sandbox',
-        '--disable-web-security',
-        '--disable-features=IsolateOrigins,site-per-process'
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--disable-gpu'
       ]
     });
     
     const page = await browser.newPage();
     
-    // Set user agent to mimic a real browser
+    // Set a realistic user agent
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
     
-    // Navigate to y2mate which is more reliable
-    await page.goto('https://y2mate.guru/youtube-to-mp3/', { 
+    // Set viewport to a common size
+    await page.setViewport({ width: 1366, height: 768 });
+    
+    // Navigate to ssvid.net
+    console.log('Navigating to ssvid.net...');
+    await page.goto('https://ssvid.net/en10/', { 
       waitUntil: 'networkidle2',
       timeout: 30000
     });
     
-    // Input the URL
-    await page.type('#id_url', url);
+    // Wait for the input field to be available
+    await page.waitForSelector('#search__input', { timeout: 10000 });
+    
+    // Type the YouTube URL into the input field
+    console.log('Entering YouTube URL...');
+    await page.type('#search__input', youtubeUrl);
     
     // Click the convert button
-    await page.click('#btn-convert');
+    console.log('Clicking convert button...');
+    await page.click('#btn-start');
     
-    // Wait for conversion to complete
-    await page.waitForSelector('#process-result .download-table', { timeout: 60000 });
+    // Wait for the conversion to complete - look for download button or result
+    console.log('Waiting for conversion...');
     
-    // Get download link and title
-    const downloadUrl = await page.$eval('#process-result .download-table a', el => el.href);
-    const title = await page.$eval('#process-result .download-table .video-title', el => el.textContent.trim());
+    // Wait for either the download button or error message
+    await Promise.race([
+      page.waitForSelector('#download-btn', { timeout: 60000 }),
+      page.waitForSelector('.alert-error', { timeout: 60000 }),
+      page.waitForSelector('a[href*="mp3"]', { timeout: 60000 }),
+      page.waitForSelector('button#download', { timeout: 60000 })
+    ]);
+    
+    // Check if there's an error message
+    const errorElement = await page.$('.alert-error, .error, .message-error');
+    if (errorElement) {
+      const errorText = await page.evaluate(el => el.textContent, errorElement);
+      throw new Error(errorText || 'Conversion error occurred');
+    }
+    
+    // Try to find the download link in various possible ways
+    let downloadUrl = null;
+    let title = "YouTube Audio";
+    let format = "mp3";
+    let quality = "128kbps";
+    
+    // Method 1: Look for a download button with href
+    const downloadButton = await page.$('a#download, a#download-btn, a.download-btn');
+    if (downloadButton) {
+      downloadUrl = await page.evaluate(el => el.href, downloadButton);
+    }
+    
+    // Method 2: Look for any MP3 link if method 1 failed
+    if (!downloadUrl) {
+      const mp3Link = await page.$('a[href*="mp3"], button[onclick*="mp3"]');
+      if (mp3Link) {
+        const linkHandle = await mp3Link.asElement();
+        if (linkHandle) {
+          downloadUrl = await page.evaluate(el => el.href || (el.onclick ? el.onclick.toString().match(/(https?:\/\/[^\s'"]+)/)?.[1] : null), linkHandle);
+        }
+      }
+    }
+    
+    // Method 3: Extract from page content if still not found
+    if (!downloadUrl) {
+      const pageContent = await page.content();
+      const urlMatch = pageContent.match(/(https?:\/\/[^\s"']*\.mp3[^\s"']*)/);
+      if (urlMatch) {
+        downloadUrl = urlMatch[1];
+      }
+    }
+    
+    // Try to get the video title
+    try {
+      const titleElement = await page.$('.video-title, .title, h1, h2, h3');
+      if (titleElement) {
+        title = await page.evaluate(el => el.textContent, titleElement);
+        title = title.trim().substring(0, 100); // Limit title length
+      }
+    } catch (e) {
+      console.log('Could not extract title:', e.message);
+    }
+    
+    if (!downloadUrl) {
+      throw new Error("Download link tidak ditemukan setelah konversi.");
+    }
     
     await browser.close();
     
     return {
       title: title,
       downloadUrl: downloadUrl,
-      format: "mp3",
-      quality: "128kbps"
+      format: format,
+      quality: quality
     };
     
   } catch (error) {
     if (browser) await browser.close();
     console.error('Puppeteer conversion error:', error);
-    
-    // Try one more alternative
-    try {
-      return await convertWithAlternativeService(url);
-    } catch (fallbackError) {
-      console.error('All conversion methods failed:', fallbackError);
-      throw new Error('Semua metode konversi gagal');
-    }
+    throw error;
   }
 }
 
-// Alternative conversion service as final fallback
-async function convertWithAlternativeService(url) {
-  // Using onlinevideoconverter.pro API as fallback
-  const apiUrl = `https://onlinevideoconverter.pro/api/convert?url=${encodeURIComponent(url)}&format=mp3`;
-  
-  const response = await fetch(apiUrl, {
-    headers: {
-      'Accept': 'application/json',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+// Alternative conversion service as fallback
+async function convertWithAlternativeService(youtubeUrl) {
+  try {
+    // Try using y2mate API as fallback
+    const formData = {
+      query: youtubeUrl
+    };
+    
+    const response = await fetch('https://y2mate.guru/api/convert', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      body: JSON.stringify(formData)
+    });
+    
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
     }
-  });
-  
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+    
+    const data = await response.json();
+    
+    if (!data || !data.url) {
+      throw new Error('Invalid response from conversion service');
+    }
+    
+    return {
+      title: data.title || "YouTube Audio",
+      downloadUrl: data.url,
+      format: data.format || "mp3",
+      quality: data.quality || "128kbps"
+    };
+    
+  } catch (error) {
+    console.error('Alternative service error:', error);
+    
+    // Final fallback - try a different service
+    try {
+      const response = await fetch(`https://api.vevioz.com/api/button/mp3/${youtubeUrl.split('v=')[1]}`);
+      const data = await response.json();
+      
+      if (data && data.url) {
+        return {
+          title: data.title || "YouTube Audio",
+          downloadUrl: data.url,
+          format: "mp3",
+          quality: "128kbps"
+        };
+      }
+    } catch (finalError) {
+      console.error('Final fallback failed:', finalError);
+      throw new Error('Semua metode konversi gagal');
+    }
+    
+    throw error;
   }
-  
-  const data = await response.json();
-  
-  if (!data || !data.url) {
-    throw new Error('Invalid response from conversion service');
-  }
-  
-  return {
-    title: data.title || "YouTube Audio",
-    downloadUrl: data.url,
-    format: "mp3",
-    quality: data.quality || "128kbps"
-  };
 }
