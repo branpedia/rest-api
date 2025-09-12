@@ -1,4 +1,4 @@
-// API TikTok Downloader dengan Dua Server
+// API TikTok Downloader dengan Pemisahan Media
 // Endpoint: GET /api/tiktok?url=[tiktok_url]
 
 export default async function handler(req, res) {
@@ -33,12 +33,12 @@ export default async function handler(req, res) {
     let tiktokData = await tryServer1(url);
     
     // If Server 1 fails, try Server 2
-    if (!tiktokData || !tiktokData.mediaUrls || tiktokData.mediaUrls.length === 0) {
+    if (!tiktokData || (!tiktokData.images.length && !tiktokData.videos.length && !tiktokData.audios.length)) {
       tiktokData = await tryServer2(url);
     }
 
     // If both servers fail
-    if (!tiktokData || !tiktokData.mediaUrls || tiktokData.mediaUrls.length === 0) {
+    if (!tiktokData || (!tiktokData.images.length && !tiktokData.videos.length && !tiktokData.audios.length)) {
       return res.status(404).json({ error: 'Could not fetch TikTok data from any server' });
     }
 
@@ -50,8 +50,9 @@ export default async function handler(req, res) {
         author: tiktokData.meta.author || 'Unknown',
         duration: tiktokData.meta.duration || 0,
         uploadTime: tiktokData.meta.create_time || null,
-        mediaCount: tiktokData.mediaUrls.length,
-        mediaUrls: tiktokData.mediaUrls,
+        images: tiktokData.images,
+        videos: tiktokData.videos,
+        audios: tiktokData.audios,
         coverUrl: tiktokData.meta.cover || null,
         source: tiktokData.from || 'unknown'
       }
@@ -94,20 +95,38 @@ async function tryServer1(tiktokUrl) {
     }
 
     const d = data.data;
-    let mediaUrls = [];
     
-    if (d.hdplay) mediaUrls.push(d.hdplay);
-    else if (d.play) mediaUrls.push(d.play);
-    else if (d.wmplay) mediaUrls.push(d.wmplay);
+    // Pisahkan media berdasarkan jenisnya
+    const images = [];
+    const videos = [];
+    const audios = [];
     
-    if (Array.isArray(d.images)) mediaUrls = mediaUrls.concat(d.images);
-    if (Array.isArray(d.image_post)) mediaUrls = mediaUrls.concat(d.image_post);
+    // Video
+    if (d.hdplay) videos.push({ url: d.hdplay, quality: 'HD' });
+    if (d.play) videos.push({ url: d.play, quality: 'Standard' });
+    if (d.wmplay) videos.push({ url: d.wmplay, quality: 'Watermark' });
     
-    // Filter duplicates and empty values
-    mediaUrls = mediaUrls.filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+    // Images
+    if (Array.isArray(d.images)) {
+      d.images.forEach(img => images.push({ url: img }));
+    }
+    if (Array.isArray(d.image_post)) {
+      d.image_post.forEach(img => images.push({ url: img }));
+    }
+    
+    // Audio
+    if (d.music && d.music.play) {
+      audios.push({ 
+        url: d.music.play, 
+        title: d.music.title || 'TikTok Audio',
+        author: d.music.author || 'Unknown'
+      });
+    }
 
     return {
-      mediaUrls,
+      images,
+      videos,
+      audios,
       meta: { 
         title: d.title, 
         author: d.author, 
@@ -164,22 +183,36 @@ async function tryServer2(tiktokUrl) {
     const video_url = videoMatch ? videoMatch[1] : '';
     
     // Extract slide images
-    const slideImages = [];
+    const images = [];
     const imageRegex = /<li[^>]*>.*?<img[^>]*src="([^"]*)"[^>]*>/g;
     let match;
     while ((match = imageRegex.exec(html)) !== null) {
-      slideImages.push(match[1]);
+      images.push({ url: match[1] });
     }
 
-    let mediaUrls = [];
-    if (video_url) mediaUrls.push(video_url);
-    mediaUrls = mediaUrls.concat(slideImages);
+    // Extract audio (biasanya ada di akhir array images)
+    const audios = [];
+    const videos = [];
     
-    // Filter duplicates and empty values
-    mediaUrls = mediaUrls.filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+    if (video_url) {
+      videos.push({ url: video_url, quality: 'Standard' });
+    }
+    
+    // Cari URL audio (biasanya mengandung "audio_mpeg" atau "music")
+    const audioRegex = /https?:\/\/[^"']*audio[^"']*\.(mp3|m4a|aac)|https?:\/\/[^"']*music[^"']*\.(mp3|m4a|aac)/gi;
+    const audioMatches = html.match(audioRegex);
+    if (audioMatches && audioMatches.length > 0) {
+      audios.push({ 
+        url: audioMatches[0], 
+        title: 'TikTok Audio',
+        author: 'Unknown'
+      });
+    }
 
     return {
-      mediaUrls,
+      images,
+      videos,
+      audios,
       meta: { 
         title: title, 
         cover: thumbnail
