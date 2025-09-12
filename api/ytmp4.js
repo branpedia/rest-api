@@ -82,13 +82,13 @@ async function convertWithCloudscraper(url, quality) {
   try {
     // STEP 1: SEARCH - Get video info
     const searchResponse = await cloudscraper.post({
-      uri: 'https://ssvid.net/api/ajaxSearch/index',
+      uri: 'https://ssvid.net/id4/api/ajaxSearch/index',
       form: { query: url },
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         'X-Requested-With': 'XMLHttpRequest',
-        'Origin': 'https://ssvid.net',
-        'Referer': 'https://ssvid.net/'
+        'Origin': 'https://ssvid.net/id4',
+        'Referer': 'https://ssvid.net/id4'
       }
     });
 
