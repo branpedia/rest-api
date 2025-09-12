@@ -41,9 +41,7 @@ export default async function handler(request, response) {
       // First try with cloudscraper
       result = await convertWithCloudscraper(url);
     } catch (error) {
-      console.log('Cloudscraper failed, trying with Puppeteer...');
-      
-      // If cloudscraper fails, use Puppeteer as fallback
+      console.log('⚠️ Cloudscraper gagal, coba fallback ke Puppeteer...');
       result = await convertWithPuppeteer(url);
     }
 
@@ -58,11 +56,9 @@ export default async function handler(request, response) {
     });
 
   } catch (error) {
-    console.error('Error in YouTube to MP3 converter:', error);
+    console.error('❌ Error converter:', error);
     
-    // Retry logic
     if (retry < 3) {
-      // Wait for 1 second before retrying
       await new Promise(resolve => setTimeout(resolve, 1000));
       return handler({ ...request, query: { ...request.query, retry: parseInt(retry) + 1 } }, response);
     }
@@ -77,8 +73,8 @@ export default async function handler(request, response) {
 // Convert using Cloudscraper
 async function convertWithCloudscraper(url) {
   try {
-    // STEP 1: SEARCH - Get video info
-    const searchResponse = await cloudscraper.post({
+    // STEP 1: SEARCH
+    const searchData = await cloudscraper.post({
       uri: 'https://ssvid.net/api/ajaxSearch/index',
       form: { query: url },
       headers: {
@@ -86,32 +82,35 @@ async function convertWithCloudscraper(url) {
         'X-Requested-With': 'XMLHttpRequest',
         'Origin': 'https://ssvid.net',
         'Referer': 'https://ssvid.net/'
-      }
+      },
+      json: true
     });
 
-    const searchData = JSON.parse(searchResponse);
+    console.log("🔎 searchData:", searchData);
 
     if (!searchData || !searchData.vid) {
       throw new Error('Video tidak ditemukan di ssvid.net');
     }
 
-    // Get token for m4a (fallback to mp3 if not available)
+    // Cari token
     let format = "m4a";
     let token = searchData?.links?.m4a?.["140"]?.k;
 
     if (!token) {
       format = "mp3";
-      token = searchData?.links?.mp3?.mp3128?.k;
+      token = searchData?.links?.mp3?.mp3128?.k 
+           || searchData?.links?.mp3?.["128"]?.k
+           || searchData?.links?.audio?.["128"]?.k;
     }
 
     if (!token) {
-      throw new Error("Token konversi untuk M4A/MP3 tidak ditemukan.");
+      throw new Error("Token konversi tidak ditemukan.");
     }
 
     const vid = searchData.vid;
 
-    // STEP 2: CONVERT - Get download link
-    const convertResponse = await cloudscraper.post({
+    // STEP 2: CONVERT
+    const convertData = await cloudscraper.post({
       uri: 'https://ssvid.net/api/ajaxConvert/convert',
       form: { vid, k: token },
       headers: {
@@ -119,11 +118,12 @@ async function convertWithCloudscraper(url) {
         'X-Requested-With': 'XMLHttpRequest',
         'Origin': 'https://ssvid.net',
         'Referer': 'https://ssvid.net/'
-      }
+      },
+      json: true
     });
 
-    const convertData = JSON.parse(convertResponse);
-    
+    console.log("🎯 convertData:", convertData);
+
     if (!convertData || !convertData.dlink) {
       throw new Error("Download link tidak ditemukan.");
     }
@@ -134,9 +134,9 @@ async function convertWithCloudscraper(url) {
       format: format,
       quality: format === "mp3" ? "128kbps" : "140kbps"
     };
-    
+
   } catch (error) {
-    console.error('Cloudscraper conversion error:', error);
+    console.error('⚠️ Cloudscraper error:', error.message);
     throw error;
   }
 }
@@ -151,24 +151,17 @@ async function convertWithPuppeteer(url) {
     });
     
     const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+    await page.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    );
     
-    // Navigate to ytmp3.cc
-    await page.goto('https://ytmp3.cc/en13/', { 
-      waitUntil: 'networkidle2',
-      timeout: 30000
-    });
+    await page.goto('https://ytmp3.cc/en13/', { waitUntil: 'networkidle2', timeout: 30000 });
     
-    // Input the URL
     await page.type('#input', url);
-    
-    // Click the convert button
     await page.click('#submit');
     
-    // Wait for conversion to complete
     await page.waitForSelector('#download', { timeout: 60000 });
     
-    // Get download link and title
     const downloadUrl = await page.$eval('#download', el => el.href);
     const title = await page.$eval('#title', el => el.value);
     
@@ -183,7 +176,7 @@ async function convertWithPuppeteer(url) {
     
   } catch (error) {
     if (browser) await browser.close();
-    console.error('Puppeteer conversion error:', error);
+    console.error('⚠️ Puppeteer error:', error.message);
     throw error;
   }
 }
