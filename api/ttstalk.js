@@ -1,3 +1,7 @@
+import cloudscraper from 'cloudscraper';
+import { JSDOM } from 'jsdom';
+import puppeteer from 'puppeteer';
+
 // API TikTok Profile Fetcher
 // Endpoint: GET /api/ttstalk?username=[username]
 
@@ -24,8 +28,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Scrape TikTok profile data
-    const profileData = await scrapeTikTokProfile(username);
+    // Try cloudscraper first (faster)
+    let profileData = await scrapeWithCloudscraper(username);
+    
+    // If cloudscraper fails, use puppeteer (slower but more reliable)
+    if (!profileData) {
+      profileData = await scrapeWithPuppeteer(username);
+    }
 
     if (!profileData) {
       return res.status(404).json({ error: 'Profile not found or private' });
@@ -46,12 +55,12 @@ export default async function handler(req, res) {
   }
 }
 
-// Function to scrape TikTok profile data
-async function scrapeTikTokProfile(username) {
+// Function to scrape with Cloudscraper (faster)
+async function scrapeWithCloudscraper(username) {
   try {
     const url = `https://www.tiktok.com/@${username}`;
     
-    const response = await fetch(url, {
+    const html = await cloudscraper.get(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -62,64 +71,183 @@ async function scrapeTikTokProfile(username) {
       }
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const html = await response.text();
+    const dom = new JSDOM(html);
+    const document = dom.window.document;
     
-    // Extract profile data using regex patterns
-    const profileData = extractProfileData(html);
-    
-    return {
-      username: username,
-      ...profileData
-    };
+    return extractProfileData(document, username);
 
   } catch (error) {
-    console.error('Scraping error:', error);
+    console.error('Cloudscraper error:', error);
     return null;
   }
 }
 
-// Function to extract profile data from HTML
-function extractProfileData(html) {
+// Function to scrape with Puppeteer (for bypassing challenges)
+async function scrapeWithPuppeteer(username) {
+  let browser = null;
+  try {
+    const url = `https://www.tiktok.com/@${username}`;
+    
+    // Launch puppeteer with stealth settings
+    browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-web-security',
+        '--disable-features=IsolateOrigins,site-per-process',
+        '--window-size=1920,1080'
+      ]
+    });
+
+    const page = await browser.newPage();
+    
+    // Set user agent and viewport
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+    await page.setViewport({ width: 1920, height: 1080 });
+    
+    // Block unnecessary resources to speed up
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      if (['image', 'stylesheet', 'font', 'media'].includes(request.resourceType())) {
+        request.abort();
+      } else {
+        request.continue();
+      }
+    });
+
+    // Navigate to page
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+
+    // Check for challenge popups and close them
+    await handlePopupChallenges(page);
+
+    // Wait for profile data to load
+    await page.waitForSelector('[data-e2e="followers-count"], [data-e2e="following-count"], [data-e2e="likes-count"]', { 
+      timeout: 10000 
+    }).catch(() => {
+      console.log('Profile stats not found, continuing anyway');
+    });
+
+    // Get the page content
+    const html = await page.content();
+    const dom = new JSDOM(html);
+    const document = dom.window.document;
+    
+    return extractProfileData(document, username);
+
+  } catch (error) {
+    console.error('Puppeteer error:', error);
+    return null;
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
+  }
+}
+
+// Function to handle popup challenges (cookie consent, login modals, etc.)
+async function handlePopupChallenges(page) {
+  try {
+    // Wait a bit for popups to appear
+    await page.waitForTimeout(2000);
+
+    // Try to close various types of popups
+    const popupSelectors = [
+      'button[aria-label="Close"]',
+      'div[aria-label="Close"]',
+      '.close-button',
+      '.modal-close',
+      '.cookie-banner-close',
+      'button:has(svg.close)',
+      '[data-e2e="modal-close-button"]',
+      '.tiktok-dialog-close',
+      'div[class*="close"]',
+      'button[class*="close"]'
+    ];
+
+    for (const selector of popupSelectors) {
+      try {
+        const closeButton = await page.$(selector);
+        if (closeButton) {
+          await closeButton.click();
+          console.log(`Closed popup with selector: ${selector}`);
+          await page.waitForTimeout(1000);
+        }
+      } catch (e) {
+        // Continue with next selector
+      }
+    }
+
+    // Handle specific TikTok challenges
+    await handleTikTokSpecificChallenges(page);
+
+  } catch (error) {
+    console.error('Error handling popups:', error);
+  }
+}
+
+// Function to handle TikTok-specific challenges
+async function handleTikTokSpecificChallenges(page) {
+  try {
+    // Check for age verification
+    const ageVerify = await page.$('[data-e2e="age-verification-button"]');
+    if (ageVerify) {
+      await ageVerify.click();
+      await page.waitForTimeout(1000);
+    }
+
+    // Check for login modal
+    const loginModal = await page.$('[data-e2e="login-modal"]');
+    if (loginModal) {
+      const closeLogin = await page.$('[data-e2e="login-modal-close-btn"]');
+      if (closeLogin) {
+        await closeLogin.click();
+        await page.waitForTimeout(1000);
+      }
+    }
+
+  } catch (error) {
+    console.error('Error handling TikTok challenges:', error);
+  }
+}
+
+// Function to extract profile data from DOM
+function extractProfileData(document, username) {
   // Extract following count
-  const followingMatch = html.match(/<strong[^>]*title="Mengikuti"[^>]*>([\d.,KM]+)<\/strong>/) ||
-                        html.match(/<strong[^>]*data-e2e="following-count"[^>]*>([\d.,KM]+)<\/strong>/);
-  const following = followingMatch ? followingMatch[1] : '0';
+  const followingElem = document.querySelector('[data-e2e="following-count"]');
+  const following = followingElem ? followingElem.textContent.trim() : '0';
 
   // Extract followers count
-  const followersMatch = html.match(/<strong[^>]*title="Pengikut"[^>]*>([\d.,KM]+)<\/strong>/) ||
-                        html.match(/<strong[^>]*data-e2e="followers-count"[^>]*>([\d.,KM]+)<\/strong>/);
-  const followers = followersMatch ? followersMatch[1] : '0';
+  const followersElem = document.querySelector('[data-e2e="followers-count"]');
+  const followers = followersElem ? followersElem.textContent.trim() : '0';
 
   // Extract likes count
-  const likesMatch = html.match(/<strong[^>]*title="Suka"[^>]*>([\d.,KM]+)<\/strong>/) ||
-                    html.match(/<strong[^>]*data-e2e="likes-count"[^>]*>([\d.,KM]+)<\/strong>/);
-  const likes = likesMatch ? likesMatch[1] : '0';
+  const likesElem = document.querySelector('[data-e2e="likes-count"]');
+  const likes = likesElem ? likesElem.textContent.trim() : '0';
 
   // Extract bio/description
-  const bioMatch = html.match(/<h2[^>]*data-e2e="user-bio"[^>]*>(.*?)<\/h2>/) ||
-                  html.match(/<h2[^>]*class="[^"]*ShareDesc[^"]*"[^>]*>(.*?)<\/h2>/);
-  const bio = bioMatch ? cleanHtml(bioMatch[1]) : '';
+  const bioElem = document.querySelector('[data-e2e="user-bio"]');
+  const bio = bioElem ? bioElem.textContent.trim() : '';
 
   // Extract profile link
-  const linkMatch = html.match(/<a[^>]*data-e2e="user-link"[^>]*href="([^"]*)"[^>]*>/) ||
-                   html.match(/<a[^>]*class="[^"]*BioLink[^"]*"[^>]*href="([^"]*)"[^>]*>/);
-  const link = linkMatch ? linkMatch[1] : '';
+  const linkElem = document.querySelector('[data-e2e="user-link"]');
+  const link = linkElem ? linkElem.href : '';
 
-  // Extract display name (if available)
-  const displayNameMatch = html.match(/<h1[^>]*data-e2e="user-title"[^>]*>(.*?)<\/h1>/) ||
-                          html.match(/<h1[^>]*class="[^"]*ShareTitle[^"]*"[^>]*>(.*?)<\/h1>/);
-  const displayName = displayNameMatch ? cleanHtml(displayNameMatch[1]) : '';
+  // Extract display name
+  const displayNameElem = document.querySelector('[data-e2e="user-title"]');
+  const displayName = displayNameElem ? displayNameElem.textContent.trim() : '';
 
-  // Extract avatar (if available)
-  const avatarMatch = html.match(/<img[^>]*data-e2e="user-avatar"[^>]*src="([^"]*)"[^>]*>/) ||
-                     html.match(/<img[^>]*class="[^"]*Avatar[^"]*"[^>]*src="([^"]*)"[^>]*>/);
-  const avatar = avatarMatch ? avatarMatch[1] : '';
+  // Extract avatar
+  const avatarElem = document.querySelector('[data-e2e="user-avatar"]');
+  const avatar = avatarElem ? avatarElem.src : '';
+
+  // Extract verified status
+  const verifiedElem = document.querySelector('[data-e2e="verified-icon"]');
+  const isVerified = !!verifiedElem;
 
   return {
+    username,
     displayName,
     following: formatCount(following),
     followers: formatCount(followers),
@@ -127,22 +255,22 @@ function extractProfileData(html) {
     bio,
     link,
     avatar,
+    isVerified,
     profileUrl: `https://www.tiktok.com/@${username}`
   };
 }
 
-// Helper function to clean HTML tags
-function cleanHtml(text) {
-  return text.replace(/<[^>]*>/g, '').trim();
-}
-
 // Helper function to format count (convert K/M to numbers)
 function formatCount(count) {
-  if (count.includes('K')) {
-    return parseFloat(count.replace('K', '')) * 1000;
+  if (!count) return 0;
+  
+  const cleanCount = count.replace(/\./g, '');
+  
+  if (cleanCount.includes('K')) {
+    return parseFloat(cleanCount.replace('K', '')) * 1000;
   }
-  if (count.includes('M')) {
-    return parseFloat(count.replace('M', '')) * 1000000;
+  if (cleanCount.includes('M')) {
+    return parseFloat(cleanCount.replace('M', '')) * 1000000;
   }
-  return parseInt(count.replace(/\./g, '')) || 0;
+  return parseInt(cleanCount) || 0;
 }
