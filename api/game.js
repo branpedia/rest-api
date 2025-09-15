@@ -29,14 +29,21 @@ const s = {
             if (!data.status || !data.result) throw Error('Data tidak ditemukan. Periksa kembali ID-nya.');
             
             const { username, user_id, region } = data.result;
+            
+            // Hanya tampilkan region jika ada nilainya
+            const resultData = {
+                username,
+                user_id,
+                game: 'Free Fire'
+            };
+            
+            if (region) {
+                resultData.region = region;
+            }
+            
             return {
                 success: true,
-                data: {
-                    username,
-                    user_id,
-                    region: region || null,
-                    game: 'Free Fire'
-                }
+                data: resultData
             };
         } catch (error) {
             return {
@@ -86,14 +93,21 @@ const s = {
             if (!data.status || data.code !== 200) throw Error('ID tidak ditemukan atau salah format.');
             
             const { username, user_id, zone } = data.data;
+            
+            // Hanya tampilkan zone jika ada nilainya
+            const resultData = {
+                username,
+                user_id,
+                game: 'Mobile Legends Adventure'
+            };
+            
+            if (zone) {
+                resultData.zone = zone;
+            }
+            
             return {
                 success: true,
-                data: {
-                    username,
-                    user_id,
-                    zone: zone || null,
-                    game: 'Mobile Legends Adventure'
-                }
+                data: resultData
             };
         } catch (error) {
             return {
@@ -164,15 +178,24 @@ const s = {
                 throw Error(`Player dengan ID ${userId} tidak ditemukan di semua zone yang tersedia.`);
             }
             
+            // Hanya tampilkan zone dan zone_name jika ada nilainya
+            const resultData = {
+                username: userData.username,
+                user_id: userData.user_id,
+                game: 'Eggy Party'
+            };
+            
+            if (userData.zone || foundZone.zoneId) {
+                resultData.zone = userData.zone || foundZone.zoneId;
+            }
+            
+            if (foundZone.name) {
+                resultData.zone_name = foundZone.name;
+            }
+            
             return {
                 success: true,
-                data: {
-                    username: userData.username,
-                    user_id: userData.user_id,
-                    zone: userData.zone || foundZone.zoneId || null,
-                    zone_name: foundZone.name || null,
-                    game: 'Eggy Party'
-                }
+                data: resultData
             };
         } catch (error) {
             return {
@@ -220,14 +243,21 @@ const s = {
             }
             
             const { username, user_id, zone } = data.data;
+            
+            // Hanya tampilkan zone jika ada nilainya
+            const resultData = {
+                username,
+                user_id,
+                game: 'Undawn'
+            };
+            
+            if (zone) {
+                resultData.zone = zone;
+            }
+            
             return {
                 success: true,
-                data: {
-                    username,
-                    user_id,
-                    zone: zone || null,
-                    game: 'Undawn'
-                }
+                data: resultData
             };
         } catch (error) {
             return {
