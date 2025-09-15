@@ -1,3 +1,7 @@
+import cloudscraper from 'cloudscraper';
+import { JSDOM } from 'jsdom';
+import puppeteer from 'puppeteer';
+
 const s = {
     tools: {
         async hit(description, url, options, returnType = 'text') {
@@ -265,6 +269,235 @@ const s = {
                 error: error.message
             };
         }
+    },
+
+    // Genshin Impact Stalk (Menggunakan Cloudscraper dan JSDOM)
+    async genshinStalk(userId) {
+        let browser;
+        try {
+            // Try with cloudscraper first
+            let html;
+            try {
+                html = await cloudscraper.get(`https://enka.network/u/${userId}/`);
+            } catch (error) {
+                console.log('Cloudscraper failed, trying with Puppeteer...');
+                
+                // If cloudscraper fails, use Puppeteer as fallback
+                browser = await puppeteer.launch({
+                    headless: true,
+                    args: ['--no-sandbox', '--disable-setuid-sandbox']
+                });
+                
+                const page = await browser.newPage();
+                await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+                await page.goto(`https://enka.network/u/${userId}/`, { waitUntil: 'networkidle2' });
+                
+                html = await page.content();
+                if (browser) await browser.close();
+            }
+
+            const dom = new JSDOM(html);
+            const document = dom.window.document;
+
+            // Extract character image
+            const imgElement = document.querySelector('figure.avatar-icon img');
+            const characterImage = imgElement ? `https://enka.network${imgElement.getAttribute('src')}` : null;
+
+            // Get API data
+            const apiUrl = `https://enka.network/api/uid/${userId}`;
+            let apiData;
+            
+            try {
+                const apiResponse = await cloudscraper.get(apiUrl, { json: true });
+                apiData = apiResponse;
+            } catch (apiError) {
+                console.log('API request failed, trying with fetch...');
+                const { data } = await this.tools.hit('Genshin API', apiUrl, {}, 'json');
+                apiData = data;
+            }
+
+            if (!apiData.playerInfo) {
+                throw Error('Player tidak ditemukan atau UID salah.');
+            }
+
+            const { nickname, level, worldLevel, signature, nameCardId, finishAchievementNum } = apiData.playerInfo;
+            
+            const resultData = {
+                nickname: nickname || 'Tidak diketahui',
+                level: level || '-',
+                world_level: worldLevel || '-',
+                signature: signature || 'Tidak ada',
+                name_card_id: nameCardId || '-',
+                achievements: finishAchievementNum || '-',
+                uid: userId,
+                character_image: characterImage,
+                game: 'Genshin Impact'
+            };
+            
+            return {
+                success: true,
+                data: resultData
+            };
+        } catch (error) {
+            if (browser) await browser.close();
+            return {
+                success: false,
+                error: error.message || 'Gagal mengambil data Genshin Impact'
+            };
+        }
+    },
+
+    // Honkai: Star Rail Stalk (Menggunakan Cloudscraper, Puppeteer, dan JSDOM)
+    async hsrStalk(userId) {
+        let browser;
+        try {
+            const url = `https://enka.network/hsr/${userId}/`;
+            let html;
+            
+            try {
+                html = await cloudscraper.get(url);
+            } catch (error) {
+                console.log('Cloudscraper failed, trying with Puppeteer...');
+                
+                browser = await puppeteer.launch({
+                    headless: true,
+                    args: ['--no-sandbox', '--disable-setuid-sandbox']
+                });
+                
+                const page = await browser.newPage();
+                await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+                await page.goto(url, { waitUntil: 'networkidle2' });
+                
+                html = await page.content();
+                if (browser) await browser.close();
+            }
+
+            const dom = new JSDOM(html);
+            const document = dom.window.document;
+
+            // Ambil data dasar
+            let nickname = document.querySelector('.details h1')?.textContent.trim();
+            let arText = document.querySelector('.ar')?.textContent.trim() || '';
+            let trailblaze = arText.match(/TL\s*(\d+)/)?.[1] || 'N/A';
+            let eq = arText.match(/EQ\s*(\d+)/)?.[1] || 'N/A';
+
+            // Ambil semua pasangan <td> untuk Total Achievement dan Simulated Universe
+            let tdList = [...document.querySelectorAll('td.svelte-1dtsens')];
+            let totalAchievement = 'N/A';
+            let simUniverse = 'N/A';
+
+            for (let i = 0; i < tdList.length; i++) {
+                let text = tdList[i].textContent.trim();
+                let nextText = tdList[i + 1]?.textContent.trim() || '';
+                if (/Total Achievement/i.test(text)) totalAchievement = nextText;
+                if (/Simulated Universe/i.test(text)) simUniverse = nextText;
+            }
+
+            // Karakter utama
+            let characterName = document.querySelector('.name')?.textContent.trim() || 'N/A';
+            let charLevel = document.querySelector('.level')?.textContent.trim() || 'N/A';
+
+            const resultData = {
+                nickname: nickname || 'N/A',
+                trailblaze_level: trailblaze,
+                equilibrium_level: eq,
+                total_achievement: totalAchievement,
+                simulated_universe: simUniverse,
+                main_character: characterName,
+                main_character_level: charLevel,
+                uid: userId,
+                game: 'Honkai: Star Rail'
+            };
+            
+            return {
+                success: true,
+                data: resultData
+            };
+        } catch (error) {
+            if (browser) await browser.close();
+            return {
+                success: false,
+                error: error.message || 'Gagal mengambil data Honkai: Star Rail'
+            };
+        }
+    },
+
+    // Zenless Zone Zero Stalk (Menggunakan Cloudscraper, Puppeteer, dan JSDOM)
+    async zzzStalk(userId) {
+        let browser;
+        try {
+            const url = `https://enka.network/zzz/${userId}/`;
+            let html;
+            
+            try {
+                html = await cloudscraper.get(url);
+            } catch (error) {
+                console.log('Cloudscraper failed, trying with Puppeteer...');
+                
+                browser = await puppeteer.launch({
+                    headless: true,
+                    args: ['--no-sandbox', '--disable-setuid-sandbox']
+                });
+                
+                const page = await browser.newPage();
+                await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+                await page.goto(url, { waitUntil: 'networkidle2' });
+                
+                html = await page.content();
+                if (browser) await browser.close();
+            }
+
+            const dom = new JSDOM(html);
+            const document = dom.window.document;
+
+            // Info dasar
+            let nickname = document.querySelector('.details h1')?.textContent.trim() || 'N/A';
+            let levelText = document.querySelector('.ar')?.textContent.trim() || '';
+            let agentLevel = levelText.match(/IL\s*(\d+)/)?.[1] || 'N/A';
+
+            // Ambil mode game
+            let modeElements = [...document.querySelectorAll('.svelte-1dtsens')];
+            let combinedModes = [];
+            let lastNumber = null;
+
+            for (let el of modeElements) {
+                let text = el.textContent.trim();
+                if (/^\d+$/.test(text)) {
+                    lastNumber = text;
+                } else if (lastNumber && /(Shiyu|Endless|Deadly|Pemanjatan|Serbuan|Jalan Mulus|Line Breaker)/i.test(text)) {
+                    let combined = `${lastNumber}  ${text}`;
+                    if (!combinedModes.some(m => m.includes(text))) {
+                        combinedModes.push(combined);
+                    }
+                    lastNumber = null;
+                }
+            }
+
+            // Karakter utama
+            let characterName = document.querySelector('.name')?.textContent.trim() || 'N/A';
+            let charLevel = document.querySelector('.level')?.textContent.trim() || 'N/A';
+
+            const resultData = {
+                nickname,
+                agent_level: agentLevel,
+                main_character: characterName,
+                main_character_level: charLevel,
+                game_modes: combinedModes.length > 0 ? combinedModes : ['N/A'],
+                uid: userId,
+                game: 'Zenless Zone Zero'
+            };
+            
+            return {
+                success: true,
+                data: resultData
+            };
+        } catch (error) {
+            if (browser) await browser.close();
+            return {
+                success: false,
+                error: error.message || 'Gagal mengambil data Zenless Zone Zero'
+            };
+        }
     }
 };
 
@@ -330,10 +563,22 @@ export default async function handler(request, response) {
             case 'undawn':
                 result = await s.undawnStalk(id);
                 break;
+            case 'genshin':
+            case 'gi':
+                result = await s.genshinStalk(id);
+                break;
+            case 'hsr':
+            case 'honkaistarrail':
+                result = await s.hsrStalk(id);
+                break;
+            case 'zzz':
+            case 'zenlesszonezero':
+                result = await s.zzzStalk(id);
+                break;
             default:
                 return response.status(400).json({ 
                     success: false, 
-                    error: 'Game tidak didukung. Pilihan: ff, aov, mla, pubg, eggy, hok, undawn' 
+                    error: 'Game tidak didukung. Pilihan: ff, aov, mla, pubg, eggy, hok, undawn, genshin, hsr, zzz' 
                 });
         }
 
@@ -348,7 +593,7 @@ export default async function handler(request, response) {
         console.error('Error fetching game data:', error);
         
         // Retry logic
-        if (retry < 2) {
+        if (retry < 3) {
             // Wait for 1 second before retrying
             await new Promise(resolve => setTimeout(resolve, 1000));
             return handler({ ...request, query: { ...request.query, retry: parseInt(retry) + 1 } }, response);
