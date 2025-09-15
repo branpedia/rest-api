@@ -180,6 +180,33 @@ const s = {
                 error: error.message
             };
         }
+    },
+
+    // Honor of Kings Stalk
+    async hokStalk(userId) {
+        try {
+            const url = `https://ceknickname.com/api/game/honor-of-kings-tp?id=${userId}`;
+            const { data } = await this.tools.hit('HOK stalk', url, {}, 'json');
+            
+            if (!data.status || data.code !== 200) {
+                throw Error('Player tidak ditemukan atau ID salah.');
+            }
+            
+            const { username, user_id } = data.data;
+            return {
+                success: true,
+                data: {
+                    username,
+                    user_id,
+                    game: 'Honor of Kings'
+                }
+            };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message
+            };
+        }
     }
 };
 
@@ -238,10 +265,14 @@ export default async function handler(request, response) {
             case 'eggyparty':
                 result = await s.eggyStalk(id);
                 break;
+            case 'hok':
+            case 'honorofkings':
+                result = await s.hokStalk(id);
+                break;
             default:
                 return response.status(400).json({ 
                     success: false, 
-                    error: 'Game tidak didukung. Pilihan: ff, aov, mla, pubg, eggy' 
+                    error: 'Game tidak didukung. Pilihan: ff, aov, mla, pubg, eggy, hok' 
                 });
         }
 
