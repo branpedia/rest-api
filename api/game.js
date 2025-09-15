@@ -34,7 +34,7 @@ const s = {
                 data: {
                     username,
                     user_id,
-                    region,
+                    region: region || null,
                     game: 'Free Fire'
                 }
             };
@@ -91,7 +91,7 @@ const s = {
                 data: {
                     username,
                     user_id,
-                    zone: zone || 'Tidak diketahui',
+                    zone: zone || null,
                     game: 'Mobile Legends Adventure'
                 }
             };
@@ -169,8 +169,8 @@ const s = {
                 data: {
                     username: userData.username,
                     user_id: userData.user_id,
-                    zone: userData.zone || foundZone.zoneId,
-                    zone_name: foundZone.name,
+                    zone: userData.zone || foundZone.zoneId || null,
+                    zone_name: foundZone.name || null,
                     game: 'Eggy Party'
                 }
             };
@@ -199,6 +199,34 @@ const s = {
                     username,
                     user_id,
                     game: 'Honor of Kings'
+                }
+            };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    },
+
+    // Undawn Stalk
+    async undawnStalk(userId) {
+        try {
+            const url = `https://ceknickname.com/api/game/undawn?id=${userId}`;
+            const { data } = await this.tools.hit('Undawn stalk', url, {}, 'json');
+            
+            if (!data.status || data.code !== 200) {
+                throw Error('Player tidak ditemukan atau ID salah.');
+            }
+            
+            const { username, user_id, zone } = data.data;
+            return {
+                success: true,
+                data: {
+                    username,
+                    user_id,
+                    zone: zone || null,
+                    game: 'Undawn'
                 }
             };
         } catch (error) {
@@ -269,10 +297,13 @@ export default async function handler(request, response) {
             case 'honorofkings':
                 result = await s.hokStalk(id);
                 break;
+            case 'undawn':
+                result = await s.undawnStalk(id);
+                break;
             default:
                 return response.status(400).json({ 
                     success: false, 
-                    error: 'Game tidak didukung. Pilihan: ff, aov, mla, pubg, eggy, hok' 
+                    error: 'Game tidak didukung. Pilihan: ff, aov, mla, pubg, eggy, hok, undawn' 
                 });
         }
 
