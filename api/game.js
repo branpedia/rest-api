@@ -265,6 +265,150 @@ const s = {
                 error: error.message
             };
         }
+    },
+
+    // Genshin Impact Stalk
+    async genshinStalk(userId) {
+        try {
+            const url = `https://enka.network/api/uid/${userId}`;
+            const { data } = await this.tools.hit('Genshin stalk', url, {}, 'json');
+            
+            if (!data.playerInfo) {
+                throw Error('Player tidak ditemukan atau UID salah.');
+            }
+            
+            const { nickname, level, worldLevel, signature, nameCardId, finishAchievementNum } = data.playerInfo;
+            
+            const resultData = {
+                nickname: nickname || 'Tidak diketahui',
+                level: level || '-',
+                world_level: worldLevel || '-',
+                signature: signature || 'Tidak ada',
+                name_card_id: nameCardId || '-',
+                achievements: finishAchievementNum || '-',
+                uid: userId,
+                game: 'Genshin Impact'
+            };
+            
+            return {
+                success: true,
+                data: resultData
+            };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    },
+
+    // Honkai: Star Rail Stalk
+    async hsrStalk(userId) {
+        try {
+            const url = `https://enka.network/hsr/${userId}/`;
+            const { data: html } = await this.tools.hit('HSR stalk', url, {}, 'text');
+            
+            // Parse HTML menggunakan regex (tanpa JSDOM)
+            const nicknameMatch = html.match(/<h1[^>]*>([^<]+)<\/h1>/);
+            const arTextMatch = html.match(/<div[^>]*class="[^"]*ar[^"]*"[^>]*>([^<]+)<\/div>/);
+            const characterNameMatch = html.match(/<div[^>]*class="[^"]*name[^"]*"[^>]*>([^<]+)<\/div>/);
+            const charLevelMatch = html.match(/<div[^>]*class="[^"]*level[^"]*"[^>]*>([^<]+)<\/div>/);
+            
+            let nickname = nicknameMatch ? nicknameMatch[1].trim() : 'N/A';
+            let arText = arTextMatch ? arTextMatch[1].trim() : '';
+            let characterName = characterNameMatch ? characterNameMatch[1].trim() : 'N/A';
+            let charLevel = charLevelMatch ? charLevelMatch[1].trim() : 'N/A';
+            
+            let trailblaze = arText.match(/TL\s*(\d+)/)?.[1] || 'N/A';
+            let eq = arText.match(/EQ\s*(\d+)/)?.[1] || 'N/A';
+            
+            // Extract data from tables using regex
+            let totalAchievement = 'N/A';
+            let simUniverse = 'N/A';
+            
+            const achievementMatch = html.match(/Total Achievement[^<]*<\/td>\s*<td[^>]*>([^<]+)<\/td>/i);
+            const universeMatch = html.match(/Simulated Universe[^<]*<\/td>\s*<td[^>]*>([^<]+)<\/td>/i);
+            
+            if (achievementMatch) totalAchievement = achievementMatch[1].trim();
+            if (universeMatch) simUniverse = universeMatch[1].trim();
+            
+            const resultData = {
+                nickname,
+                trailblaze_level: trailblaze,
+                equilibrium_level: eq,
+                total_achievement: totalAchievement,
+                simulated_universe: simUniverse,
+                main_character: characterName,
+                main_character_level: charLevel,
+                uid: userId,
+                game: 'Honkai: Star Rail'
+            };
+            
+            return {
+                success: true,
+                data: resultData
+            };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    },
+
+    // Zenless Zone Zero Stalk
+    async zzzStalk(userId) {
+        try {
+            const url = `https://enka.network/zzz/${userId}/`;
+            const { data: html } = await this.tools.hit('ZZZ stalk', url, {}, 'text');
+            
+            // Parse HTML menggunakan regex (tanpa JSDOM)
+            const nicknameMatch = html.match(/<h1[^>]*>([^<]+)<\/h1>/);
+            const levelTextMatch = html.match(/<div[^>]*class="[^"]*ar[^"]*"[^>]*>([^<]+)<\/div>/);
+            const characterNameMatch = html.match(/<div[^>]*class="[^"]*name[^"]*"[^>]*>([^<]+)<\/div>/);
+            const charLevelMatch = html.match(/<div[^>]*class="[^"]*level[^"]*"[^>]*>([^<]+)<\/div>/);
+            
+            let nickname = nicknameMatch ? nicknameMatch[1].trim() : 'N/A';
+            let levelText = levelTextMatch ? levelTextMatch[1].trim() : '';
+            let characterName = characterNameMatch ? characterNameMatch[1].trim() : 'N/A';
+            let charLevel = charLevelMatch ? charLevelMatch[1].trim() : 'N/A';
+            
+            let agentLevel = levelText.match(/IL\s*(\d+)/)?.[1] || 'N/A';
+            
+            // Extract game modes using regex
+            let gameModes = [];
+            const modeRegex = /<td[^>]*>(\d+)<\/td>\s*<td[^>]*>([^<]+)<\/td>/g;
+            let match;
+            
+            while ((match = modeRegex.exec(html)) !== null) {
+                const number = match[1];
+                const mode = match[2].trim();
+                
+                if (/(Shiyu|Endless|Deadly|Pemanjatan|Serbuan|Jalan Mulus|Line Breaker)/i.test(mode)) {
+                    gameModes.push(`${number} ${mode}`);
+                }
+            }
+            
+            const resultData = {
+                nickname,
+                agent_level: agentLevel,
+                main_character: characterName,
+                main_character_level: charLevel,
+                game_modes: gameModes.length > 0 ? gameModes : ['N/A'],
+                uid: userId,
+                game: 'Zenless Zone Zero'
+            };
+            
+            return {
+                success: true,
+                data: resultData
+            };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message
+            };
+        }
     }
 };
 
@@ -330,10 +474,22 @@ export default async function handler(request, response) {
             case 'undawn':
                 result = await s.undawnStalk(id);
                 break;
+            case 'genshin':
+            case 'gi':
+                result = await s.genshinStalk(id);
+                break;
+            case 'hsr':
+            case 'honkaistarrail':
+                result = await s.hsrStalk(id);
+                break;
+            case 'zzz':
+            case 'zenlesszonezero':
+                result = await s.zzzStalk(id);
+                break;
             default:
                 return response.status(400).json({ 
                     success: false, 
-                    error: 'Game tidak didukung. Pilihan: ff, aov, mla, pubg, eggy, hok, undawn' 
+                    error: 'Game tidak didukung. Pilihan: ff, aov, mla, pubg, eggy, hok, undawn, genshin, hsr, zzz' 
                 });
         }
 
