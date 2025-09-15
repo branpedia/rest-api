@@ -1,3 +1,6 @@
+import axios from 'axios';
+import { JSDOM } from 'jsdom';
+
 const s = {
     tools: {
         async hit(description, url, options, returnType = 'text') {
@@ -267,17 +270,34 @@ const s = {
         }
     },
 
-    // Genshin Impact Stalk
+    // Genshin Impact Stalk (Menggunakan Axios)
     async genshinStalk(userId) {
         try {
-            const url = `https://enka.network/api/uid/${userId}`;
-            const { data } = await this.tools.hit('Genshin stalk', url, {}, 'json');
+            // Ambil data dari API Enka
+            const { data: apiData } = await axios.get(`https://enka.network/api/uid/${userId}`, {
+                timeout: 10000
+            });
             
-            if (!data.playerInfo) {
+            if (!apiData.playerInfo) {
                 throw Error('Player tidak ditemukan atau UID salah.');
             }
             
-            const { nickname, level, worldLevel, signature, nameCardId, finishAchievementNum } = data.playerInfo;
+            const { nickname, level, worldLevel, signature, nameCardId, finishAchievementNum } = apiData.playerInfo;
+            
+            // Ambil gambar karakter utama dari HTML
+            let characterImage = null;
+            try {
+                const { data: html } = await axios.get(`https://enka.network/u/${userId}/`, {
+                    timeout: 10000
+                });
+                const $ = cheerio.load(html);
+                const imgSrc = $('figure.avatar-icon img').attr('src');
+                if (imgSrc) {
+                    characterImage = `https://enka.network${imgSrc}`;
+                }
+            } catch (imageError) {
+                console.log('Gagal mengambil gambar karakter:', imageError.message);
+            }
             
             const resultData = {
                 nickname: nickname || 'Tidak diketahui',
@@ -287,6 +307,7 @@ const s = {
                 name_card_id: nameCardId || '-',
                 achievements: finishAchievementNum || '-',
                 uid: userId,
+                character_image: characterImage,
                 game: 'Genshin Impact'
             };
             
@@ -297,43 +318,46 @@ const s = {
         } catch (error) {
             return {
                 success: false,
-                error: error.message
+                error: error.message || 'Gagal mengambil data Genshin Impact'
             };
         }
     },
 
-    // Honkai: Star Rail Stalk
+    // Honkai: Star Rail Stalk (Menggunakan Axios dan JSDOM)
     async hsrStalk(userId) {
         try {
             const url = `https://enka.network/hsr/${userId}/`;
-            const { data: html } = await this.tools.hit('HSR stalk', url, {}, 'text');
+            const { data: html } = await axios.get(url, {
+                timeout: 10000
+            });
             
-            // Parse HTML menggunakan regex (tanpa JSDOM)
-            const nicknameMatch = html.match(/<h1[^>]*>([^<]+)<\/h1>/);
-            const arTextMatch = html.match(/<div[^>]*class="[^"]*ar[^"]*"[^>]*>([^<]+)<\/div>/);
-            const characterNameMatch = html.match(/<div[^>]*class="[^"]*name[^"]*"[^>]*>([^<]+)<\/div>/);
-            const charLevelMatch = html.match(/<div[^>]*class="[^"]*level[^"]*"[^>]*>([^<]+)<\/div>/);
-            
-            let nickname = nicknameMatch ? nicknameMatch[1].trim() : 'N/A';
-            let arText = arTextMatch ? arTextMatch[1].trim() : '';
-            let characterName = characterNameMatch ? characterNameMatch[1].trim() : 'N/A';
-            let charLevel = charLevelMatch ? charLevelMatch[1].trim() : 'N/A';
-            
+            const dom = new JSDOM(html);
+            const document = dom.window.document;
+
+            // Ambil data dasar
+            let nickname = document.querySelector('.details h1')?.textContent.trim();
+            let arText = document.querySelector('.ar')?.textContent.trim() || '';
             let trailblaze = arText.match(/TL\s*(\d+)/)?.[1] || 'N/A';
             let eq = arText.match(/EQ\s*(\d+)/)?.[1] || 'N/A';
-            
-            // Extract data from tables using regex
+
+            // Ambil semua pasangan <td> untuk Total Achievement dan Simulated Universe
+            let tdList = [...document.querySelectorAll('td.svelte-1dtsens')];
             let totalAchievement = 'N/A';
             let simUniverse = 'N/A';
-            
-            const achievementMatch = html.match(/Total Achievement[^<]*<\/td>\s*<td[^>]*>([^<]+)<\/td>/i);
-            const universeMatch = html.match(/Simulated Universe[^<]*<\/td>\s*<td[^>]*>([^<]+)<\/td>/i);
-            
-            if (achievementMatch) totalAchievement = achievementMatch[1].trim();
-            if (universeMatch) simUniverse = universeMatch[1].trim();
-            
+
+            for (let i = 0; i < tdList.length; i++) {
+                let text = tdList[i].textContent.trim();
+                let nextText = tdList[i + 1]?.textContent.trim() || '';
+                if (/Total Achievement/i.test(text)) totalAchievement = nextText;
+                if (/Simulated Universe/i.test(text)) simUniverse = nextText;
+            }
+
+            // Karakter utama
+            let characterName = document.querySelector('.name')?.textContent.trim() || 'N/A';
+            let charLevel = document.querySelector('.level')?.textContent.trim() || 'N/A';
+
             const resultData = {
-                nickname,
+                nickname: nickname || 'N/A',
                 trailblaze_level: trailblaze,
                 equilibrium_level: eq,
                 total_achievement: totalAchievement,
@@ -351,50 +375,55 @@ const s = {
         } catch (error) {
             return {
                 success: false,
-                error: error.message
+                error: error.message || 'Gagal mengambil data Honkai: Star Rail'
             };
         }
     },
 
-    // Zenless Zone Zero Stalk
+    // Zenless Zone Zero Stalk (Menggunakan Axios dan JSDOM)
     async zzzStalk(userId) {
         try {
             const url = `https://enka.network/zzz/${userId}/`;
-            const { data: html } = await this.tools.hit('ZZZ stalk', url, {}, 'text');
+            const { data: html } = await axios.get(url, {
+                timeout: 10000
+            });
             
-            // Parse HTML menggunakan regex (tanpa JSDOM)
-            const nicknameMatch = html.match(/<h1[^>]*>([^<]+)<\/h1>/);
-            const levelTextMatch = html.match(/<div[^>]*class="[^"]*ar[^"]*"[^>]*>([^<]+)<\/div>/);
-            const characterNameMatch = html.match(/<div[^>]*class="[^"]*name[^"]*"[^>]*>([^<]+)<\/div>/);
-            const charLevelMatch = html.match(/<div[^>]*class="[^"]*level[^"]*"[^>]*>([^<]+)<\/div>/);
-            
-            let nickname = nicknameMatch ? nicknameMatch[1].trim() : 'N/A';
-            let levelText = levelTextMatch ? levelTextMatch[1].trim() : '';
-            let characterName = characterNameMatch ? characterNameMatch[1].trim() : 'N/A';
-            let charLevel = charLevelMatch ? charLevelMatch[1].trim() : 'N/A';
-            
+            const dom = new JSDOM(html);
+            const document = dom.window.document;
+
+            // Info dasar
+            let nickname = document.querySelector('.details h1')?.textContent.trim() || 'N/A';
+            let levelText = document.querySelector('.ar')?.textContent.trim() || '';
             let agentLevel = levelText.match(/IL\s*(\d+)/)?.[1] || 'N/A';
-            
-            // Extract game modes using regex
-            let gameModes = [];
-            const modeRegex = /<td[^>]*>(\d+)<\/td>\s*<td[^>]*>([^<]+)<\/td>/g;
-            let match;
-            
-            while ((match = modeRegex.exec(html)) !== null) {
-                const number = match[1];
-                const mode = match[2].trim();
-                
-                if (/(Shiyu|Endless|Deadly|Pemanjatan|Serbuan|Jalan Mulus|Line Breaker)/i.test(mode)) {
-                    gameModes.push(`${number} ${mode}`);
+
+            // Ambil mode game
+            let modeElements = [...document.querySelectorAll('.svelte-1dtsens')];
+            let combinedModes = [];
+            let lastNumber = null;
+
+            for (let el of modeElements) {
+                let text = el.textContent.trim();
+                if (/^\d+$/.test(text)) {
+                    lastNumber = text;
+                } else if (lastNumber && /(Shiyu|Endless|Deadly|Pemanjatan|Serbuan|Jalan Mulus|Line Breaker)/i.test(text)) {
+                    let combined = `${lastNumber}  ${text}`;
+                    if (!combinedModes.some(m => m.includes(text))) {
+                        combinedModes.push(combined);
+                    }
+                    lastNumber = null; // reset setelah dipakai
                 }
             }
-            
+
+            // Karakter utama
+            let characterName = document.querySelector('.name')?.textContent.trim() || 'N/A';
+            let charLevel = document.querySelector('.level')?.textContent.trim() || 'N/A';
+
             const resultData = {
                 nickname,
                 agent_level: agentLevel,
                 main_character: characterName,
                 main_character_level: charLevel,
-                game_modes: gameModes.length > 0 ? gameModes : ['N/A'],
+                game_modes: combinedModes.length > 0 ? combinedModes : ['N/A'],
                 uid: userId,
                 game: 'Zenless Zone Zero'
             };
@@ -406,11 +435,14 @@ const s = {
         } catch (error) {
             return {
                 success: false,
-                error: error.message
+                error: error.message || 'Gagal mengambil data Zenless Zone Zero'
             };
         }
     }
 };
+
+// Helper function untuk cheerio (jika diperlukan)
+import cheerio from 'cheerio';
 
 export default async function handler(request, response) {
     // Set CORS headers
