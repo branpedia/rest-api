@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom'
 
 const FREEPIK_API_KEY = 'FPSXd60ff5bb7495a5f30dcf5d29a39e0696' // Using your direct API key
 const FREEPIK_API_URL = 'https://api.freepik.com/v1/ai/gemini-2-5-flash-image-preview'
+const FREEPIK_STATUS_URL = 'https://api.freepik.com/v1/ai/tasks' // Endpoint untuk check status
 
 // ==== PROMPTS ====
 const PROMPTS = [
@@ -35,6 +36,60 @@ function bufferToBase64(buffer) {
   return buffer.toString('base64')
 }
 
+// Fungsi untuk memeriksa status task
+async function checkTaskStatus(taskId) {
+  try {
+    const response = await cloudscraper.get({
+      url: `${FREEPIK_STATUS_URL}/${taskId}`,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-freepik-api-key': FREEPIK_API_KEY
+      },
+      simple: false,
+      resolveWithFullResponse: true
+    })
+
+    if (response.statusCode !== 200) {
+      throw new Error(`Status check returned ${response.statusCode}: ${response.body}`)
+    }
+
+    const responseData = JSON.parse(response.body)
+    return responseData.data
+  } catch (error) {
+    console.error('Error checking task status:', error)
+    throw error
+  }
+}
+
+// Fungsi untuk menunggu sampai task selesai
+async function waitForTaskCompletion(taskId, maxWaitTime = 120000) {
+  const startTime = Date.now()
+  const checkInterval = 3000 // Check setiap 3 detik
+
+  while (Date.now() - startTime < maxWaitTime) {
+    try {
+      const taskData = await checkTaskStatus(taskId)
+      
+      console.log(`Task ${taskId} status: ${taskData.status}`)
+      
+      if (taskData.status === 'COMPLETED') {
+        return taskData
+      } else if (taskData.status === 'FAILED') {
+        throw new Error('Image generation failed')
+      }
+      
+      // Tunggu sebelum check lagi
+      await new Promise(resolve => setTimeout(resolve, checkInterval))
+    } catch (error) {
+      console.error('Error in waitForTaskCompletion:', error)
+      // Lanjutkan mencoba meskipun ada error sementara
+      await new Promise(resolve => setTimeout(resolve, checkInterval))
+    }
+  }
+  
+  throw new Error('Task processing timeout')
+}
+
 async function img2imgWithFreepik(imageBuffer, prompt) {
   try {
     // Convert image to base64
@@ -63,7 +118,6 @@ async function img2imgWithFreepik(imageBuffer, prompt) {
     })
 
     console.log('Freepik API response status:', response.statusCode)
-    console.log('Freepik API response body:', response.body)
 
     if (response.statusCode !== 200) {
       throw new Error(`Freepik API returned status ${response.statusCode}: ${response.body}`)
@@ -76,38 +130,26 @@ async function img2imgWithFreepik(imageBuffer, prompt) {
     }
 
     const taskId = responseData.data.task_id
-    let status = responseData.data.status
-    let generatedImages = responseData.data.generated || []
+    console.log(`Task ${taskId} created with status: ${responseData.data.status}`)
 
-    console.log(`Task ${taskId} created with status: ${status}`)
-
-    // If the API doesn't provide a polling endpoint, we'll need to rely on webhooks
-    // or implement a different approach. For now, let's assume the image is generated immediately
-    // if status is COMPLETED, or wait a bit if it's IN_PROGRESS
+    // Tunggu sampai task selesai
+    console.log('Waiting for task completion...')
+    const completedTask = await waitForTaskCompletion(taskId)
     
-    if (status === 'COMPLETED' && generatedImages.length > 0) {
-      // Download the generated image
-      const generatedImageUrl = generatedImages[0]
-      console.log('Downloading generated image from:', generatedImageUrl)
-      
-      const imageResult = await cloudscraper.get({
-        url: generatedImageUrl,
-        encoding: null
-      })
-
-      return imageResult
-    } else if (status === 'IN_PROGRESS' || status === 'CREATED') {
-      // Simulate waiting for completion (this would need to be replaced with proper polling if available)
-      console.log('Waiting for image generation to complete...')
-      await new Promise(resolve => setTimeout(resolve, 10000))
-      
-      // For now, we'll throw an error as we don't have a proper polling mechanism
-      throw new Error('Image generation is in progress. Please implement proper polling or use webhooks as per Freepik API documentation.')
-    } else if (status === 'FAILED') {
-      throw new Error('Image generation failed according to API response')
-    } else {
-      throw new Error(`Unknown status: ${status}`)
+    if (!completedTask.generated || completedTask.generated.length === 0) {
+      throw new Error('No images generated')
     }
+
+    // Download the generated image
+    const generatedImageUrl = completedTask.generated[0]
+    console.log('Downloading generated image from:', generatedImageUrl)
+    
+    const imageResult = await cloudscraper.get({
+      url: generatedImageUrl,
+      encoding: null
+    })
+
+    return imageResult
   } catch (error) {
     console.error('Error in img2imgWithFreepik:', error)
     throw error
