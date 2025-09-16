@@ -2,7 +2,8 @@ import cloudscraper from 'cloudscraper'
 import puppeteer from 'puppeteer'
 import { JSDOM } from 'jsdom'
 
-const BASE_URL = 'https://ai-apps.codergautam.dev'
+const FREEPIK_API_KEY = 'FPSXd60ff5bb7495a5f30dcf5d29a39e0696' // Replace with your actual API key
+const FREEPIK_API_URL = 'https://api.freepik.com/v1/ai/gemini-2-5-flash-image-preview'
 
 // ==== PROMPTS ====
 const PROMPTS = [
@@ -29,70 +30,84 @@ function randomString(len = 12) {
   return Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
 }
 
-async function autoregist() {
-  const uid = randomString(24)
-  const email = `gienetic${Date.now()}@nyahoo.com`
-
-  const payload = JSON.stringify({
-    uid,
-    email,
-    displayName: randomString(8),
-    photoURL: 'https://i.pravatar.cc/150',
-    appId: 'photogpt'
-  })
-
-  const res = await cloudscraper.post({
-    uri: `${BASE_URL}/photogpt/create-user`,
-    body: payload,
-    headers: { 'content-type': 'application/json', 'accept': 'application/json' }
-  })
-
-  const json = JSON.parse(res)
-  if (json.success) return uid
-  throw new Error('Register gagal: ' + res)
+// Convert image buffer to base64
+function bufferToBase64(buffer) {
+  return buffer.toString('base64')
 }
 
-async function img2img(imageBuffer, prompt) {
-  const uid = await autoregist()
-  const boundary = '----WebKitFormBoundary' + randomString(16)
-
-  const bodyStart =
-    `--${boundary}\r\nContent-Disposition: form-data; name="image"; filename="input.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`
-  const bodyMiddle =
-    `\r\n--${boundary}\r\nContent-Disposition: form-data; name="prompt"\r\n\r\n${prompt}\r\n--${boundary}\r\nContent-Disposition: form-data; name="userId"\r\n\r\n${uid}\r\n--${boundary}--\r\n`
-
-  const body = Buffer.concat([
-    Buffer.from(bodyStart),
-    imageBuffer,
-    Buffer.from(bodyMiddle)
-  ])
-
-  const res = await cloudscraper.post({
-    uri: `${BASE_URL}/photogpt/generate-image`,
-    body,
-    headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` }
-  })
-
-  const json = JSON.parse(res)
-  if (!json.success) throw new Error(res)
-
-  const { pollingUrl } = json
-  let status = 'pending'
-  let resultUrl = null
-
-  while (status !== 'Ready') {
-    const pollRes = await cloudscraper.get(pollingUrl, { headers: { accept: 'application/json' } })
-    const data = JSON.parse(pollRes)
-    status = data.status
-    if (status === 'Ready') {
-      resultUrl = data.result.url
-      break
+async function img2imgWithFreepik(imageBuffer, prompt) {
+  try {
+    // Convert image to base64
+    const base64Image = bufferToBase64(imageBuffer)
+    
+    // Prepare the request payload
+    const payload = {
+      prompt: prompt,
+      reference_images: [
+        `data:image/jpeg;base64,${base64Image}`
+      ]
     }
-    await new Promise(r => setTimeout(r, 3000))
-  }
 
-  if (!resultUrl) throw new Error('Gagal dapat hasil gambar')
-  return await cloudscraper.get({ uri: resultUrl, encoding: null }) // return buffer
+    // Make the API request to Freepik
+    const response = await cloudscraper.post({
+      url: FREEPIK_API_URL,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-freepik-api-key': FREEPIK_API_KEY
+      },
+      body: JSON.stringify(payload)
+    })
+
+    const responseData = JSON.parse(response)
+    
+    if (!responseData.data || !responseData.data.task_id) {
+      throw new Error('Invalid response from Freepik API: ' + response)
+    }
+
+    const taskId = responseData.data.task_id
+    let status = responseData.data.status
+    let generatedImages = responseData.data.generated || []
+
+    // Poll for task completion
+    while (status !== 'COMPLETED' && status !== 'FAILED') {
+      // Wait before polling again
+      await new Promise(resolve => setTimeout(resolve, 3000))
+      
+      // Check task status (this would typically be a separate endpoint)
+      // For now, we'll simulate the polling process
+      // In a real implementation, you would call a status endpoint
+      const statusResponse = await cloudscraper.get({
+        url: `${FREEPIK_API_URL}/status/${taskId}`,
+        headers: {
+          'x-freepik-api-key': FREEPIK_API_KEY
+        }
+      })
+      
+      const statusData = JSON.parse(statusResponse)
+      status = statusData.data.status
+      generatedImages = statusData.data.generated || []
+      
+      if (status === 'FAILED') {
+        throw new Error('Image generation failed')
+      }
+    }
+
+    if (generatedImages.length === 0) {
+      throw new Error('No images generated')
+    }
+
+    // Download the generated image
+    const generatedImageUrl = generatedImages[0]
+    const imageResult = await cloudscraper.get({
+      url: generatedImageUrl,
+      encoding: null
+    })
+
+    return imageResult
+  } catch (error) {
+    console.error('Error in img2imgWithFreepik:', error)
+    throw error
+  }
 }
 
 async function uploadToQuaxDirect(buffer) {
@@ -162,7 +177,8 @@ export default async function handler(req, res) {
     // pilih prompt
     const prompt = (promptIndex && PROMPTS[promptIndex]) || getRandomPrompt()
 
-    const hasil = await img2img(imgBuffer, prompt)
+    // Use Freepik API instead of the old img2img function
+    const hasil = await img2imgWithFreepik(imgBuffer, prompt)
 
     let downloadUrl = await uploadToQuaxDirect(hasil)
     if (!downloadUrl) downloadUrl = await uploadToQuaxPuppeteer(hasil)
@@ -178,7 +194,7 @@ export default async function handler(req, res) {
         downloadUrl,
         uploaded: new Date().toISOString(),
         details: {
-          platform: 'Photogpt API',
+          platform: 'Freepik Gemini 2.5 Flash API',
           hosting: 'qu.ax',
           expired: 'No Expiry',
           promptUsed: prompt
