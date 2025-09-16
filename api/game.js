@@ -34,7 +34,6 @@ const s = {
             
             const { username, user_id, region } = data.result;
             
-            // Hanya tampilkan region jika ada nilainya
             const resultData = {
                 username,
                 user_id,
@@ -98,7 +97,6 @@ const s = {
             
             const { username, user_id, zone } = data.data;
             
-            // Hanya tampilkan zone jika ada nilainya
             const resultData = {
                 username,
                 user_id,
@@ -149,7 +147,6 @@ const s = {
     // Eggy Party Stalk with auto zone detection
     async eggyStalk(userId) {
         try {
-            // First, get available zones
             const zoneUrl = 'https://ceknickname.com/api/game/get-zone/eggy-party';
             const { data: zoneData } = await this.tools.hit('Eggy Party zones', zoneUrl, {}, 'json');
             
@@ -161,7 +158,6 @@ const s = {
             let userData = null;
             let foundZone = null;
             
-            // Try each zone until successful
             for (const zone of zones) {
                 try {
                     const userUrl = `https://ceknickname.com/api/game/eggy-party?id=${userId}&zone=${zone.zoneId}`;
@@ -173,7 +169,6 @@ const s = {
                         break;
                     }
                 } catch (e) {
-                    // Continue to next zone if failed
                     continue;
                 }
             }
@@ -182,7 +177,6 @@ const s = {
                 throw Error(`Player dengan ID ${userId} tidak ditemukan di semua zone yang tersedia.`);
             }
             
-            // Hanya tampilkan zone dan zone_name jika ada nilainya
             const resultData = {
                 username: userData.username,
                 user_id: userData.user_id,
@@ -248,7 +242,6 @@ const s = {
             
             const { username, user_id, zone } = data.data;
             
-            // Hanya tampilkan zone jika ada nilainya
             const resultData = {
                 username,
                 user_id,
@@ -271,18 +264,211 @@ const s = {
         }
     },
 
+    // Dragon Raja Stalk
+    async dragonRajaStalk(userId) {
+        try {
+            const url = `https://ceknickname.com/api/game/dragon-raja?id=${userId}`;
+            const { data } = await this.tools.hit('Dragon Raja stalk', url, {}, 'json');
+            
+            if (!data.status || data.code !== 200) {
+                throw Error('Player tidak ditemukan atau ID salah.');
+            }
+            
+            const { username, user_id, zone } = data.data;
+            
+            const resultData = {
+                username,
+                user_id,
+                game: 'Dragon Raja'
+            };
+            
+            if (zone) {
+                resultData.zone = zone;
+            }
+            
+            return {
+                success: true,
+                data: resultData
+            };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    },
+
+    // Call of Duty Mobile Stalk
+    async codStalk(userId) {
+        try {
+            const url = `https://ceknickname.com/api/game/call-of-duty-mobile?id=${userId}`;
+            const { data } = await this.tools.hit('COD Mobile stalk', url, {}, 'json');
+            
+            if (!data.status || data.code !== 200) {
+                throw Error('Player tidak ditemukan atau ID salah.');
+            }
+            
+            const { username, user_id, zone } = data.data;
+            
+            const resultData = {
+                username,
+                user_id,
+                game: 'Call of Duty Mobile'
+            };
+            
+            if (zone) {
+                resultData.zone = zone;
+            }
+            
+            return {
+                success: true,
+                data: resultData
+            };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    },
+
+    // EA Sports FC Mobile Stalk
+    async eaSportsStalk(userId) {
+        try {
+            const url = `https://ceknickname.com/api/game/ea-sports-fc-mobile?id=${userId}`;
+            const { data } = await this.tools.hit('EA Sports FC Mobile stalk', url, {}, 'json');
+            
+            if (!data.status || data.code !== 200) {
+                throw Error('Player tidak ditemukan atau ID salah.');
+            }
+            
+            const { username, user_id, zone } = data.data;
+            
+            const resultData = {
+                username,
+                user_id,
+                game: 'EA Sports FC Mobile'
+            };
+            
+            if (zone) {
+                resultData.zone = zone;
+            }
+            
+            return {
+                success: true,
+                data: resultData
+            };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    },
+
+    // Super Sus Stalk
+    async superSusStalk(userId) {
+        try {
+            const url = `https://ceknickname.com/api/game/super-sus?id=${userId}`;
+            const { data } = await this.tools.hit('Super Sus stalk', url, {}, 'json');
+            
+            if (!data.status || data.code !== 200) {
+                throw Error('Player tidak ditemukan atau ID salah.');
+            }
+            
+            const { username, user_id, zone } = data.data;
+            
+            const resultData = {
+                username,
+                user_id,
+                game: 'Super Sus'
+            };
+            
+            if (zone) {
+                resultData.zone = zone;
+            }
+            
+            return {
+                success: true,
+                data: resultData
+            };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    },
+
+    // Tom and Jerry Chase Stalk with auto zone detection
+    async tomJerryStalk(userId) {
+        try {
+            const zoneUrl = 'https://ceknickname.com/api/game/get-zone/tom-and-jerry-chase';
+            const { data: zoneData } = await this.tools.hit('Tom and Jerry zones', zoneUrl, {}, 'json');
+            
+            if (!zoneData.status || !zoneData.data || zoneData.data.length === 0) {
+                throw Error('Gagal mengambil daftar zone Tom and Jerry Chase.');
+            }
+            
+            const zones = zoneData.data;
+            let userData = null;
+            let foundZone = null;
+            
+            for (const zone of zones) {
+                try {
+                    const userUrl = `https://ceknickname.com/api/game/tom-and-jerry-chase?id=${userId}&zone=${zone.zoneId}`;
+                    const { data: userResponse } = await this.tools.hit(`Tom and Jerry stalk zone ${zone.zoneId}`, userUrl, {}, 'json');
+                    
+                    if (userResponse.status && userResponse.code === 200) {
+                        userData = userResponse.data;
+                        foundZone = zone;
+                        break;
+                    }
+                } catch (e) {
+                    continue;
+                }
+            }
+            
+            if (!userData) {
+                throw Error(`Player dengan ID ${userId} tidak ditemukan di semua zone yang tersedia.`);
+            }
+            
+            const resultData = {
+                username: userData.username,
+                user_id: userData.user_id,
+                game: 'Tom and Jerry Chase'
+            };
+            
+            if (userData.zone || foundZone.zoneId) {
+                resultData.zone = userData.zone || foundZone.zoneId;
+            }
+            
+            if (foundZone.name) {
+                resultData.zone_name = foundZone.name;
+            }
+            
+            return {
+                success: true,
+                data: resultData
+            };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    },
+
     // Genshin Impact Stalk (Menggunakan Cloudscraper dan JSDOM)
     async genshinStalk(userId) {
         let browser;
         try {
-            // Try with cloudscraper first
             let html;
             try {
                 html = await cloudscraper.get(`https://enka.network/u/${userId}/`);
             } catch (error) {
                 console.log('Cloudscraper failed, trying with Puppeteer...');
                 
-                // If cloudscraper fails, use Puppeteer as fallback
                 browser = await puppeteer.launch({
                     headless: true,
                     args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -299,11 +485,9 @@ const s = {
             const dom = new JSDOM(html);
             const document = dom.window.document;
 
-            // Extract character image
             const imgElement = document.querySelector('figure.avatar-icon img');
             const characterImage = imgElement ? `https://enka.network${imgElement.getAttribute('src')}` : null;
 
-            // Get API data
             const apiUrl = `https://enka.network/api/uid/${userId}`;
             let apiData;
             
@@ -375,13 +559,11 @@ const s = {
             const dom = new JSDOM(html);
             const document = dom.window.document;
 
-            // Ambil data dasar
             let nickname = document.querySelector('.details h1')?.textContent.trim();
             let arText = document.querySelector('.ar')?.textContent.trim() || '';
             let trailblaze = arText.match(/TL\s*(\d+)/)?.[1] || 'N/A';
             let eq = arText.match(/EQ\s*(\d+)/)?.[1] || 'N/A';
 
-            // Ambil semua pasangan <td> untuk Total Achievement dan Simulated Universe
             let tdList = [...document.querySelectorAll('td.svelte-1dtsens')];
             let totalAchievement = 'N/A';
             let simUniverse = 'N/A';
@@ -393,7 +575,6 @@ const s = {
                 if (/Simulated Universe/i.test(text)) simUniverse = nextText;
             }
 
-            // Karakter utama
             let characterName = document.querySelector('.name')?.textContent.trim() || 'N/A';
             let charLevel = document.querySelector('.level')?.textContent.trim() || 'N/A';
 
@@ -450,12 +631,10 @@ const s = {
             const dom = new JSDOM(html);
             const document = dom.window.document;
 
-            // Info dasar
             let nickname = document.querySelector('.details h1')?.textContent.trim() || 'N/A';
             let levelText = document.querySelector('.ar')?.textContent.trim() || '';
             let agentLevel = levelText.match(/IL\s*(\d+)/)?.[1] || 'N/A';
 
-            // Ambil mode game
             let modeElements = [...document.querySelectorAll('.svelte-1dtsens')];
             let combinedModes = [];
             let lastNumber = null;
@@ -473,7 +652,6 @@ const s = {
                 }
             }
 
-            // Karakter utama
             let characterName = document.querySelector('.name')?.textContent.trim() || 'N/A';
             let charLevel = document.querySelector('.level')?.textContent.trim() || 'N/A';
 
@@ -563,6 +741,29 @@ export default async function handler(request, response) {
             case 'undawn':
                 result = await s.undawnStalk(id);
                 break;
+            case 'dragonraja':
+            case 'dr':
+                result = await s.dragonRajaStalk(id);
+                break;
+            case 'cod':
+            case 'codm':
+            case 'callofduty':
+                result = await s.codStalk(id);
+                break;
+            case 'easports':
+            case 'fcmobile':
+            case 'fc':
+                result = await s.eaSportsStalk(id);
+                break;
+            case 'supersus':
+            case 'sus':
+                result = await s.superSusStalk(id);
+                break;
+            case 'tomjerry':
+            case 'tomandjerry':
+            case 'tj':
+                result = await s.tomJerryStalk(id);
+                break;
             case 'genshin':
             case 'gi':
                 result = await s.genshinStalk(id);
@@ -578,11 +779,10 @@ export default async function handler(request, response) {
             default:
                 return response.status(400).json({ 
                     success: false, 
-                    error: 'Game tidak didukung. Pilihan: ff, aov, mla, pubg, eggy, hok, undawn, genshin, hsr, zzz' 
+                    error: 'Game tidak didukung. Pilihan: ff, aov, mla, pubg, eggy, hok, undawn, dragonraja, cod, easports, supersus, tomjerry, genshin, hsr, zzz' 
                 });
         }
 
-        // If the result has an error, throw it
         if (!result.success) {
             throw new Error(result.error);
         }
@@ -592,9 +792,7 @@ export default async function handler(request, response) {
     } catch (error) {
         console.error('Error fetching game data:', error);
         
-        // Retry logic
         if (retry < 3) {
-            // Wait for 1 second before retrying
             await new Promise(resolve => setTimeout(resolve, 1000));
             return handler({ ...request, query: { ...request.query, retry: parseInt(retry) + 1 } }, response);
         }
