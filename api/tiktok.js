@@ -86,27 +86,21 @@ async function downloadFromSSSTik(url) {
 
     const html = await response.text();
     
-    // Parse the HTML response
-    const parser = new HTMLParser();
-    const document = parser.parseFromString(html, 'text/html');
-    
+    // Parse the HTML response using regex
     let noWatermark = null;
     let audio = null;
     let thumbnail = null;
-    const allLinks = [];
-
-    // Find all links
-    const links = document.querySelectorAll('a');
-    for (const link of links) {
-      const href = link.getAttribute('href');
+    
+    // Extract download links
+    const linkRegex = /<a\s+[^>]*href=["']([^"']*)["'][^>]*>/gi;
+    let linkMatch;
+    while ((linkMatch = linkRegex.exec(html)) !== null) {
+      const href = linkMatch[1];
       if (href && href.includes('tikcdn.io')) {
-        allLinks.push(href);
-
         // Detect no watermark video
         if (!noWatermark && /\/ssstik\/\d+/.test(href)) {
           noWatermark = href;
         }
-
         // Detect audio link
         if (!audio && /\/ssstik\/aHR0c/.test(href)) {
           audio = href;
@@ -114,10 +108,11 @@ async function downloadFromSSSTik(url) {
       }
     }
 
-    // Find thumbnail
-    const images = document.querySelectorAll('img');
-    for (const img of images) {
-      const src = img.getAttribute('src');
+    // Extract thumbnail
+    const imgRegex = /<img\s+[^>]*src=["']([^"']*)["'][^>]*>/gi;
+    let imgMatch;
+    while ((imgMatch = imgRegex.exec(html)) !== null) {
+      const src = imgMatch[1];
       if (src && src.includes('tikcdn.io') && src.includes('/a/')) {
         thumbnail = src;
         break;
@@ -130,7 +125,14 @@ async function downloadFromSSSTik(url) {
     if (audio) mediaUrls.push(audio);
 
     if (mediaUrls.length === 0) {
-      throw new Error('No media URLs found');
+      // Fallback: try to find any download link
+      const directDownloadRegex = /href=["'](https?:\/\/[^"']*\.(mp4|mp3)[^"']*)["']/i;
+      const directMatch = directDownloadRegex.exec(html);
+      if (directMatch && directMatch[1]) {
+        mediaUrls.push(directMatch[1]);
+      } else {
+        throw new Error('No media URLs found');
+      }
     }
 
     return {
@@ -142,48 +144,5 @@ async function downloadFromSSSTik(url) {
   } catch (error) {
     console.error('SSSTik download error:', error);
     throw new Error(`Failed to download from ssstik.io: ${error.message}`);
-  }
-}
-
-// Simple HTML parser for server-side use
-class HTMLParser {
-  parseFromString(html, mimeType) {
-    // Create a simple DOM-like structure
-    const dom = {
-      querySelectorAll: (selector) => this.querySelectorAll(html, selector),
-    };
-    return dom;
-  }
-
-  querySelectorAll(html, selector) {
-    const elements = [];
-    
-    if (selector === 'a') {
-      // Find all anchor tags
-      const regex = /<a\s+[^>]*href=["']([^"']*)["'][^>]*>/gi;
-      let match;
-      while ((match = regex.exec(html)) !== null) {
-        elements.push({
-          getAttribute: (attr) => {
-            if (attr === 'href') return match[1];
-            return null;
-          }
-        });
-      }
-    } else if (selector === 'img') {
-      // Find all image tags
-      const regex = /<img\s+[^>]*src=["']([^"']*)["'][^>]*>/gi;
-      let match;
-      while ((match = regex.exec(html)) !== null) {
-        elements.push({
-          getAttribute: (attr) => {
-            if (attr === 'src') return match[1];
-            return null;
-          }
-        });
-      }
-    }
-    
-    return elements;
   }
 }
