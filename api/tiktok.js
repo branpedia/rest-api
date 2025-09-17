@@ -1,4 +1,4 @@
-// API TikTok Downloader dengan Server Utama dan Backup
+// API TikTok Downloader dengan Dua Server
 // Endpoint: GET /api/tiktok?url=[tiktok_url]
 
 export default async function handler(req, res) {
@@ -29,20 +29,15 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid TikTok URL' });
     }
 
-    // Try Main Server first (ssstik.io)
-    let tiktokData = await downloadFromSSSTik(url);
+    // Try Server 1 first
+    let tiktokData = await tryServer1(url);
     
-    // If Main Server fails, try Backup Server 1 (TikWM)
-    if (!tiktokData || !tiktokData.mediaUrls || tiktokData.mediaUrls.length === 0) {
-      tiktokData = await tryServer1(url);
-    }
-    
-    // If Backup Server 1 fails, try Backup Server 2 (SaveTik)
+    // If Server 1 fails, try Server 2
     if (!tiktokData || !tiktokData.mediaUrls || tiktokData.mediaUrls.length === 0) {
       tiktokData = await tryServer2(url);
     }
 
-    // If all servers fail
+    // If both servers fail
     if (!tiktokData || !tiktokData.mediaUrls || tiktokData.mediaUrls.length === 0) {
       return res.status(404).json({ error: 'Could not fetch TikTok data from any server' });
     }
@@ -51,13 +46,13 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       data: {
-        title: tiktokData.meta?.title || 'TikTok Video',
-        author: tiktokData.meta?.author || 'TikTok User',
-        duration: tiktokData.meta?.duration || 0,
-        uploadTime: tiktokData.meta?.create_time || null,
+        title: tiktokData.meta.title || 'TikTok Video',
+        author: tiktokData.meta.author || 'Unknown',
+        duration: tiktokData.meta.duration || 0,
+        uploadTime: tiktokData.meta.create_time || null,
         mediaCount: tiktokData.mediaUrls.length,
         mediaUrls: tiktokData.mediaUrls,
-        coverUrl: tiktokData.meta?.cover || tiktokData.thumbnail || null,
+        coverUrl: tiktokData.meta.cover || null,
         source: tiktokData.from || 'unknown'
       }
     });
@@ -71,126 +66,7 @@ export default async function handler(req, res) {
   }
 }
 
-// Main function to download from ssstik.io
-async function downloadFromSSSTik(url) {
-  try {
-    // Create form data
-    const formData = new URLSearchParams();
-    formData.append('id', url);
-    formData.append('locale', 'en');
-    formData.append('tt', '0');
-
-    // Make request to ssstik.io
-    const response = await fetch('https://ssstik.io/abc?url=dl', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Origin': 'https://ssstik.io',
-        'Referer': 'https://ssstik.io/',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1'
-      },
-      body: formData
-    });
-
-    if (!response.ok) {
-      throw new Error(`Server responded with status ${response.status}`);
-    }
-
-    const html = await response.text();
-    
-    // Parse the HTML response using regex
-    let noWatermark = null;
-    let audio = null;
-    let thumbnail = null;
-    
-    // Extract download links
-    const linkRegex = /<a\s+[^>]*href=["']([^"']*)["'][^>]*>/gi;
-    let linkMatch;
-    const allLinks = [];
-    
-    while ((linkMatch = linkRegex.exec(html)) !== null) {
-      const href = linkMatch[1];
-      if (href && href.includes('tikcdn.io')) {
-        allLinks.push(href);
-      }
-    }
-
-    // Check if this is a slideshow (multiple images)
-    const isSlideshow = allLinks.some(link => link.includes('/photo-mode/'));
-    
-    if (isSlideshow) {
-      // For slideshows, collect all image links
-      const imageLinks = allLinks.filter(link => 
-        link.includes('/photo-mode/') && !link.includes('/video/')
-      );
-      
-      return {
-        mediaUrls: imageLinks,
-        thumbnail: imageLinks[0] || null, // Use first image as thumbnail
-        from: 'server utama'
-      };
-    } else {
-      // For videos, proceed as before
-      while ((linkMatch = linkRegex.exec(html)) !== null) {
-        const href = linkMatch[1];
-        if (href && href.includes('tikcdn.io')) {
-          // Detect no watermark video
-          if (!noWatermark && /\/ssstik\/\d+/.test(href)) {
-            noWatermark = href;
-          }
-          // Detect audio link
-          if (!audio && /\/ssstik\/aHR0c/.test(href)) {
-            audio = href;
-          }
-        }
-      }
-
-      // Extract thumbnail
-      const imgRegex = /<img\s+[^>]*src=["']([^"']*)["'][^>]*>/gi;
-      let imgMatch;
-      while ((imgMatch = imgRegex.exec(html)) !== null) {
-        const src = imgMatch[1];
-        if (src && src.includes('tikcdn.io') && src.includes('/a/')) {
-          thumbnail = src;
-          break;
-        }
-      }
-
-      // Prepare media URLs
-      const mediaUrls = [];
-      if (noWatermark) mediaUrls.push(noWatermark);
-      if (audio) mediaUrls.push(audio);
-
-      if (mediaUrls.length === 0) {
-        // Fallback: try to find any download link
-        const directDownloadRegex = /href=["'](https?:\/\/[^"']*\.(mp4|mp3)[^"']*)["']/i;
-        const directMatch = directDownloadRegex.exec(html);
-        if (directMatch && directMatch[1]) {
-          mediaUrls.push(directMatch[1]);
-        } else {
-          throw new Error('No media URLs found');
-        }
-      }
-
-      return {
-        mediaUrls,
-        thumbnail,
-        from: 'server utama'
-      };
-    }
-
-  } catch (error) {
-    console.error('Server utama download error:', error);
-    return null;
-  }
-}
-
-// Function to try Backup Server 1 (TikWM)
+// Function to try Server 1 (TikWM)
 async function tryServer1(tiktokUrl) {
   try {
     const encodedParams = new URLSearchParams();
@@ -224,12 +100,8 @@ async function tryServer1(tiktokUrl) {
     else if (d.play) mediaUrls.push(d.play);
     else if (d.wmplay) mediaUrls.push(d.wmplay);
     
-    // Handle slideshow images
-    if (Array.isArray(d.images)) {
-      mediaUrls = mediaUrls.concat(d.images);
-    } else if (Array.isArray(d.image_post)) {
-      mediaUrls = mediaUrls.concat(d.image_post);
-    }
+    if (Array.isArray(d.images)) mediaUrls = mediaUrls.concat(d.images);
+    if (Array.isArray(d.image_post)) mediaUrls = mediaUrls.concat(d.image_post);
     
     // Filter duplicates and empty values
     mediaUrls = mediaUrls.filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
@@ -243,7 +115,7 @@ async function tryServer1(tiktokUrl) {
         cover: d.cover, 
         create_time: d.create_time 
       },
-      from: 'Server 1 (backup)'
+      from: 'Server 1'
     };
 
   } catch (error) {
@@ -252,7 +124,7 @@ async function tryServer1(tiktokUrl) {
   }
 }
 
-// Function to try Backup Server 2 (SaveTik)
+// Function to try Server 2 (SaveTik)
 async function tryServer2(tiktokUrl) {
   try {
     const formData = new URLSearchParams();
@@ -312,7 +184,7 @@ async function tryServer2(tiktokUrl) {
         title: title, 
         cover: thumbnail
       },
-      from: 'Server 2 (backup)'
+      from: 'Server 2'
     };
 
   } catch (error) {
