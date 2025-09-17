@@ -31,6 +31,21 @@ const s = {
         }
     },
 
+    // Fungsi baru untuk mendownload gambar dari URL
+    async downloadImageFromUrl(imageUrl) {
+        try {
+            const response = await fetch(imageUrl);
+            if (!response.ok) {
+                throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
+            }
+            
+            const arrayBuffer = await response.arrayBuffer();
+            return Buffer.from(arrayBuffer);
+        } catch (error) {
+            throw new Error(`Download image failed: ${error.message}`);
+        }
+    },
+
     async uploadImage(imageBuffer, scaleRatio) {
         const pathname = '/api/UpscalerNew/UploadNew'
         const url = new URL(pathname, this.baseUrl)
@@ -123,29 +138,72 @@ export default async function handler(request, response) {
         return;
     }
 
-    // Only allow POST requests
-    if (request.method !== 'POST') {
+    // Allow both GET and POST requests
+    if (request.method !== 'GET' && request.method !== 'POST') {
         return response.status(405).json({ success: false, error: 'Method not allowed' });
     }
 
-    const { image, scale = 2, retry = 0 } = request.body;
-
-    if (!image) {
-        return response.status(400).json({ success: false, error: 'Parameter image diperlukan (base64 encoded)' });
-    }
-
-    // Validate scale parameter
+    let imageBuffer, scaleNum, retryCount;
     const availableScaleRatio = [2, 4];
-    const scaleNum = parseInt(scale);
-    if (!availableScaleRatio.includes(scaleNum)) {
-        return response.status(400).json({ success: false, error: 'Scale harus 2 atau 4' });
+
+    // Handle GET request with URL parameter
+    if (request.method === 'GET') {
+        const { url: imageUrl, scale = 2, retry = 0 } = request.query;
+
+        if (!imageUrl) {
+            return response.status(400).json({ success: false, error: 'Parameter url diperlukan' });
+        }
+
+        // Validate URL
+        try {
+            new URL(imageUrl);
+        } catch (e) {
+            return response.status(400).json({ success: false, error: 'URL tidak valid' });
+        }
+
+        // Validate scale parameter
+        scaleNum = parseInt(scale);
+        if (!availableScaleRatio.includes(scaleNum)) {
+            return response.status(400).json({ success: false, error: 'Scale harus 2 atau 4' });
+        }
+
+        retryCount = parseInt(retry);
+
+        try {
+            // Download image from URL
+            imageBuffer = await s.downloadImageFromUrl(imageUrl);
+        } catch (error) {
+            console.error('Error downloading image:', error);
+            return response.status(400).json({ success: false, error: 'Gagal mengunduh gambar dari URL' });
+        }
+    } 
+    // Handle POST request with base64 image
+    else if (request.method === 'POST') {
+        const { image, scale = 2, retry = 0 } = request.body;
+
+        if (!image) {
+            return response.status(400).json({ success: false, error: 'Parameter image diperlukan (base64 encoded)' });
+        }
+
+        // Validate scale parameter
+        scaleNum = parseInt(scale);
+        if (!availableScaleRatio.includes(scaleNum)) {
+            return response.status(400).json({ success: false, error: 'Scale harus 2 atau 4' });
+        }
+
+        retryCount = parseInt(retry);
+
+        try {
+            // Convert base64 to buffer
+            const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
+            imageBuffer = Buffer.from(base64Data, 'base64');
+        } catch (error) {
+            console.error('Error processing base64 image:', error);
+            return response.status(400).json({ success: false, error: 'Format base64 tidak valid' });
+        }
     }
 
     try {
-        // Convert base64 to buffer
-        const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
-        const imageBuffer = Buffer.from(base64Data, 'base64');
-
         // Process image
         const result = await s.upscale(imageBuffer, scaleNum);
 
@@ -163,10 +221,28 @@ export default async function handler(request, response) {
         console.error('Error processing image:', error);
         
         // Retry logic
-        if (retry < 2) {
+        if (retryCount < 2) {
             // Wait for 1 second before retrying
             await new Promise(resolve => setTimeout(resolve, 1000));
-            return handler({ ...request, body: { ...request.body, retry: parseInt(retry) + 1 } }, response);
+            
+            if (request.method === 'GET') {
+                // For GET requests, we need to reconstruct the query
+                const newQuery = new URLSearchParams(request.query);
+                newQuery.set('retry', retryCount + 1);
+                
+                // Create a new request object with updated query
+                const newRequest = {
+                    ...request,
+                    query: Object.fromEntries(newQuery)
+                };
+                return handler(newRequest, response);
+            } else {
+                // For POST requests
+                return handler({ 
+                    ...request, 
+                    body: { ...request.body, retry: retryCount + 1 } 
+                }, response);
+            }
         }
         
         return response.status(500).json({ 
