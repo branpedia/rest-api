@@ -111,52 +111,78 @@ async function downloadFromSSSTik(url) {
     // Extract download links
     const linkRegex = /<a\s+[^>]*href=["']([^"']*)["'][^>]*>/gi;
     let linkMatch;
+    const allLinks = [];
+    
     while ((linkMatch = linkRegex.exec(html)) !== null) {
       const href = linkMatch[1];
       if (href && href.includes('tikcdn.io')) {
-        // Detect no watermark video
-        if (!noWatermark && /\/ssstik\/\d+/.test(href)) {
-          noWatermark = href;
+        allLinks.push(href);
+      }
+    }
+
+    // Check if this is a slideshow (multiple images)
+    const isSlideshow = allLinks.some(link => link.includes('/photo-mode/'));
+    
+    if (isSlideshow) {
+      // For slideshows, collect all image links
+      const imageLinks = allLinks.filter(link => 
+        link.includes('/photo-mode/') && !link.includes('/video/')
+      );
+      
+      return {
+        mediaUrls: imageLinks,
+        thumbnail: imageLinks[0] || null, // Use first image as thumbnail
+        from: 'server utama'
+      };
+    } else {
+      // For videos, proceed as before
+      while ((linkMatch = linkRegex.exec(html)) !== null) {
+        const href = linkMatch[1];
+        if (href && href.includes('tikcdn.io')) {
+          // Detect no watermark video
+          if (!noWatermark && /\/ssstik\/\d+/.test(href)) {
+            noWatermark = href;
+          }
+          // Detect audio link
+          if (!audio && /\/ssstik\/aHR0c/.test(href)) {
+            audio = href;
+          }
         }
-        // Detect audio link
-        if (!audio && /\/ssstik\/aHR0c/.test(href)) {
-          audio = href;
+      }
+
+      // Extract thumbnail
+      const imgRegex = /<img\s+[^>]*src=["']([^"']*)["'][^>]*>/gi;
+      let imgMatch;
+      while ((imgMatch = imgRegex.exec(html)) !== null) {
+        const src = imgMatch[1];
+        if (src && src.includes('tikcdn.io') && src.includes('/a/')) {
+          thumbnail = src;
+          break;
         }
       }
-    }
 
-    // Extract thumbnail
-    const imgRegex = /<img\s+[^>]*src=["']([^"']*)["'][^>]*>/gi;
-    let imgMatch;
-    while ((imgMatch = imgRegex.exec(html)) !== null) {
-      const src = imgMatch[1];
-      if (src && src.includes('tikcdn.io') && src.includes('/a/')) {
-        thumbnail = src;
-        break;
+      // Prepare media URLs
+      const mediaUrls = [];
+      if (noWatermark) mediaUrls.push(noWatermark);
+      if (audio) mediaUrls.push(audio);
+
+      if (mediaUrls.length === 0) {
+        // Fallback: try to find any download link
+        const directDownloadRegex = /href=["'](https?:\/\/[^"']*\.(mp4|mp3)[^"']*)["']/i;
+        const directMatch = directDownloadRegex.exec(html);
+        if (directMatch && directMatch[1]) {
+          mediaUrls.push(directMatch[1]);
+        } else {
+          throw new Error('No media URLs found');
+        }
       }
+
+      return {
+        mediaUrls,
+        thumbnail,
+        from: 'server utama'
+      };
     }
-
-    // Prepare media URLs
-    const mediaUrls = [];
-    if (noWatermark) mediaUrls.push(noWatermark);
-    if (audio) mediaUrls.push(audio);
-
-    if (mediaUrls.length === 0) {
-      // Fallback: try to find any download link
-      const directDownloadRegex = /href=["'](https?:\/\/[^"']*\.(mp4|mp3)[^"']*)["']/i;
-      const directMatch = directDownloadRegex.exec(html);
-      if (directMatch && directMatch[1]) {
-        mediaUrls.push(directMatch[1]);
-      } else {
-        throw new Error('No media URLs found');
-      }
-    }
-
-    return {
-      mediaUrls,
-      thumbnail,
-      from: 'server utama'
-    };
 
   } catch (error) {
     console.error('Server utama download error:', error);
@@ -198,8 +224,12 @@ async function tryServer1(tiktokUrl) {
     else if (d.play) mediaUrls.push(d.play);
     else if (d.wmplay) mediaUrls.push(d.wmplay);
     
-    if (Array.isArray(d.images)) mediaUrls = mediaUrls.concat(d.images);
-    if (Array.isArray(d.image_post)) mediaUrls = mediaUrls.concat(d.image_post);
+    // Handle slideshow images
+    if (Array.isArray(d.images)) {
+      mediaUrls = mediaUrls.concat(d.images);
+    } else if (Array.isArray(d.image_post)) {
+      mediaUrls = mediaUrls.concat(d.image_post);
+    }
     
     // Filter duplicates and empty values
     mediaUrls = mediaUrls.filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
