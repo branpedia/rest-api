@@ -1,9 +1,5 @@
-// API TikTok Downloader dengan Multi-Server Support
+// API TikTok Downloader dengan Server Utama ssstik.io
 // Endpoint: GET /api/tiktok?url=[tiktok_url]
-
-import cloudscraper from 'cloudscraper';
-import { JSDOM } from 'jsdom';
-import puppeteer from 'puppeteer';
 
 export default async function handler(req, res) {
   // Set CORS headers
@@ -33,74 +29,19 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid TikTok URL' });
     }
 
-    // Try multiple servers
-    let tiktokData = null;
-    
-    // Server 1: ttsave.app (using AJAX search)
-    try {
-      tiktokData = await tryTTSaveApp(url);
-      console.log('Server 1 success');
-    } catch (error) {
-      console.log('Server 1 failed:', error.message);
-    }
-    
-    // Server 2: savetik.co (using AJAX search)
-    if (!tiktokData || !tiktokData.mediaUrls || tiktokData.mediaUrls.length === 0) {
-      try {
-        tiktokData = await trySaveTik(url);
-        console.log('Server 2 success');
-      } catch (error) {
-        console.log('Server 2 failed:', error.message);
-      }
-    }
-    
-    // Server 3: tikwn.com (using AJAX search)
-    if (!tiktokData || !tiktokData.mediaUrls || tiktokData.mediaUrls.length === 0) {
-      try {
-        tiktokData = await tryTikWN(url);
-        console.log('Server 3 success');
-      } catch (error) {
-        console.log('Server 3 failed:', error.message);
-      }
-    }
-    
-    // Server 4: ssstik.io (using AJAX search)
-    if (!tiktokData || !tiktokData.mediaUrls || tiktokData.mediaUrls.length === 0) {
-      try {
-        tiktokData = await trySSSTik(url);
-        console.log('Server 4 success');
-      } catch (error) {
-        console.log('Server 4 failed:', error.message);
-      }
-    }
-    
-    // Server 5: Use puppeteer as last resort
-    if (!tiktokData || !tiktokData.mediaUrls || tiktokData.mediaUrls.length === 0) {
-      try {
-        tiktokData = await tryWithPuppeteer(url);
-        console.log('Server 5 (Puppeteer) success');
-      } catch (error) {
-        console.log('Server 5 failed:', error.message);
-      }
-    }
-
-    // If all servers fail
-    if (!tiktokData || !tiktokData.mediaUrls || tiktokData.mediaUrls.length === 0) {
-      return res.status(404).json({ error: 'Could not fetch TikTok data from any server' });
-    }
+    // Use ssstik.io as the main server
+    const tiktokData = await downloadFromSSSTik(url);
 
     // Return successful response
     return res.status(200).json({
       success: true,
       data: {
-        title: tiktokData.meta.title || 'TikTok Video',
-        author: tiktokData.meta.author || 'Unknown',
-        duration: tiktokData.meta.duration || 0,
-        uploadTime: tiktokData.meta.create_time || null,
+        title: 'TikTok Video',
+        author: 'TikTok User',
         mediaCount: tiktokData.mediaUrls.length,
         mediaUrls: tiktokData.mediaUrls,
-        coverUrl: tiktokData.meta.cover || null,
-        source: tiktokData.from || 'unknown'
+        coverUrl: tiktokData.thumbnail || null,
+        source: 'ssstik.io'
       }
     });
 
@@ -113,305 +54,136 @@ export default async function handler(req, res) {
   }
 }
 
-// Server 1: ttsave.app (using AJAX search)
-async function tryTTSaveApp(tiktokUrl) {
-  return new Promise((resolve, reject) => {
-    const options = {
+// Main function to download from ssstik.io
+async function downloadFromSSSTik(url) {
+  try {
+    // Create form data
+    const formData = new URLSearchParams();
+    formData.append('id', url);
+    formData.append('locale', 'en');
+    formData.append('tt', '0');
+
+    // Make request to ssstik.io
+    const response = await fetch('https://ssstik.io/abc?url=dl', {
       method: 'POST',
-      url: 'https://ttsave.app/download',
-      formData: { id: tiktokUrl },
       headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Origin': 'https://ssstik.io',
+        'Referer': 'https://ssstik.io/',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
-        'Origin': 'https://ttsave.app',
-        'Referer': 'https://ttsave.app/id',
-        'DNT': '1',
+        'Accept-Encoding': 'gzip, deflate',
         'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-        'X-Requested-With': 'XMLHttpRequest'
-      }
-    };
-
-    cloudscraper(options, (error, response, body) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      try {
-        const dom = new JSDOM(body);
-        const document = dom.window.document;
-        
-        // Extract download link
-        const downloadBtn = document.querySelector('#btn-download-fallback');
-        const downloadUrl = downloadBtn ? downloadBtn.href : null;
-        
-        // Extract title
-        const titleEl = document.querySelector('#download-progress-name');
-        const title = titleEl && titleEl.textContent ? titleEl.textContent : 'TikTok Video';
-        
-        if (!downloadUrl) {
-          reject(new Error('No download URL found'));
-          return;
-        }
-
-        resolve({
-          mediaUrls: [downloadUrl],
-          meta: { 
-            title: title,
-            author: 'TikTok User',
-            cover: null
-          },
-          from: 'ttsave.app'
-        });
-      } catch (parseError) {
-        reject(parseError);
-      }
-    });
-  });
-}
-
-// Server 2: savetik.co (using AJAX search)
-async function trySaveTik(tiktokUrl) {
-  return new Promise((resolve, reject) => {
-    const options = {
-      method: 'POST',
-      url: 'https://savetik.co/api/ajaxSearch',
-      formData: { q: tiktokUrl },
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Origin': 'https://savetik.co',
-        'Referer': 'https://savetik.co/en',
-        'DNT': '1',
-        'Connection': 'keep-alive',
-        'X-Requested-With': 'XMLHttpRequest'
-      }
-    };
-
-    cloudscraper(options, (error, response, body) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      try {
-        const data = JSON.parse(body);
-        
-        if (!data.data) {
-          reject(new Error('No data found in response'));
-          return;
-        }
-
-        // Parse HTML response
-        const dom = new JSDOM(data.data);
-        const document = dom.window.document;
-        
-        // Extract video URL
-        const videoElement = document.querySelector('video#vid');
-        const videoUrl = videoElement ? videoElement.getAttribute('data-src') : null;
-        
-        // Extract title
-        const titleElement = document.querySelector('h3');
-        const title = titleElement ? titleElement.textContent : 'TikTok Video';
-        
-        // Extract author
-        const authorElement = document.querySelector('.user-name');
-        const author = authorElement ? authorElement.textContent : 'TikTok User';
-        
-        if (!videoUrl) {
-          reject(new Error('No video URL found'));
-          return;
-        }
-
-        resolve({
-          mediaUrls: [videoUrl],
-          meta: { 
-            title: title,
-            author: author,
-            cover: null
-          },
-          from: 'savetik.co'
-        });
-      } catch (parseError) {
-        reject(parseError);
-      }
-    });
-  });
-}
-
-// Server 3: tikwn.com (using AJAX search)
-async function tryTikWN(tiktokUrl) {
-  return new Promise((resolve, reject) => {
-    const options = {
-      method: 'POST',
-      url: 'https://tikwn.com/api/ajaxSearch',
-      formData: { q: tiktokUrl },
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Origin': 'https://tikwn.com',
-        'Referer': 'https://tikwn.com',
-        'DNT': '1',
-        'Connection': 'keep-alive',
-        'X-Requested-With': 'XMLHttpRequest'
-      }
-    };
-
-    cloudscraper(options, (error, response, body) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      try {
-        const data = JSON.parse(body);
-        
-        if (!data.data) {
-          reject(new Error('No data found in response'));
-          return;
-        }
-
-        // Parse HTML response
-        const dom = new JSDOM(data.data);
-        const document = dom.window.document;
-        
-        // Extract video URL
-        const downloadLink = document.querySelector('a[download]');
-        const videoUrl = downloadLink ? downloadLink.href : null;
-        
-        // Extract title
-        const titleElement = document.querySelector('h3');
-        const title = titleElement ? titleElement.textContent : 'TikTok Video';
-        
-        if (!videoUrl) {
-          reject(new Error('No video URL found'));
-          return;
-        }
-
-        resolve({
-          mediaUrls: [videoUrl],
-          meta: { 
-            title: title,
-            author: 'TikTok User',
-            cover: null
-          },
-          from: 'tikwn.com'
-        });
-      } catch (parseError) {
-        reject(parseError);
-      }
-    });
-  });
-}
-
-// Server 4: ssstik.io (using AJAX search)
-async function trySSSTik(tiktokUrl) {
-  return new Promise((resolve, reject) => {
-    const options = {
-      method: 'POST',
-      url: 'https://ssstik.io/abc?url=dl',
-      formData: { id: tiktokUrl, locale: 'en' },
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Origin': 'https://ssstik.io',
-        'Referer': 'https://ssstik.io/en',
-        'DNT': '1',
-        'Connection': 'keep-alive',
-        'X-Requested-With': 'XMLHttpRequest'
-      }
-    };
-
-    cloudscraper(options, (error, response, body) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      try {
-        const data = JSON.parse(body);
-        
-        if (!data || !data.url) {
-          reject(new Error('No download URL found in response'));
-          return;
-        }
-
-        resolve({
-          mediaUrls: [data.url],
-          meta: { 
-            title: data.title || 'TikTok Video',
-            author: data.author || 'TikTok User',
-            cover: null
-          },
-          from: 'ssstik.io'
-        });
-      } catch (parseError) {
-        reject(parseError);
-      }
-    });
-  });
-}
-
-// Server 5: Use puppeteer as last resort
-async function tryWithPuppeteer(tiktokUrl) {
-  let browser = null;
-  
-  try {
-    // Launch puppeteer with stealth options
-    browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-web-security',
-        '--disable-features=IsolateOrigins,site-per-process'
-      ]
-    });
-    
-    const page = await browser.newPage();
-    
-    // Set user agent to mimic a real browser
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-    
-    // Navigate to ttsave.app
-    await page.goto('https://ttsave.app/id', { waitUntil: 'networkidle2' });
-    
-    // Fill in the form
-    await page.type('#input-query', tiktokUrl);
-    
-    // Click the download button
-    await page.click('#btn-download');
-    
-    // Wait for results to load
-    await page.waitForSelector('#btn-download-fallback', { timeout: 15000 });
-    
-    // Extract the download URL
-    const downloadUrl = await page.$eval('#btn-download-fallback', el => el.href);
-    
-    // Extract title if available
-    const title = await page.$eval('#download-progress-name', el => el.textContent).catch(() => 'TikTok Video');
-    
-    await browser.close();
-    
-    return {
-      mediaUrls: [downloadUrl],
-      meta: { 
-        title: title,
-        author: 'TikTok User',
-        cover: null
+        'Upgrade-Insecure-Requests': '1'
       },
-      from: 'ttsave.app (Puppeteer)'
-    };
-    
-  } catch (error) {
-    if (browser) {
-      await browser.close();
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server responded with status ${response.status}`);
     }
-    throw error;
+
+    const html = await response.text();
+    
+    // Parse the HTML response
+    const parser = new HTMLParser();
+    const document = parser.parseFromString(html, 'text/html');
+    
+    let noWatermark = null;
+    let audio = null;
+    let thumbnail = null;
+    const allLinks = [];
+
+    // Find all links
+    const links = document.querySelectorAll('a');
+    for (const link of links) {
+      const href = link.getAttribute('href');
+      if (href && href.includes('tikcdn.io')) {
+        allLinks.push(href);
+
+        // Detect no watermark video
+        if (!noWatermark && /\/ssstik\/\d+/.test(href)) {
+          noWatermark = href;
+        }
+
+        // Detect audio link
+        if (!audio && /\/ssstik\/aHR0c/.test(href)) {
+          audio = href;
+        }
+      }
+    }
+
+    // Find thumbnail
+    const images = document.querySelectorAll('img');
+    for (const img of images) {
+      const src = img.getAttribute('src');
+      if (src && src.includes('tikcdn.io') && src.includes('/a/')) {
+        thumbnail = src;
+        break;
+      }
+    }
+
+    // Prepare media URLs
+    const mediaUrls = [];
+    if (noWatermark) mediaUrls.push(noWatermark);
+    if (audio) mediaUrls.push(audio);
+
+    if (mediaUrls.length === 0) {
+      throw new Error('No media URLs found');
+    }
+
+    return {
+      mediaUrls,
+      thumbnail,
+      from: 'ssstik.io'
+    };
+
+  } catch (error) {
+    console.error('SSSTik download error:', error);
+    throw new Error(`Failed to download from ssstik.io: ${error.message}`);
+  }
+}
+
+// Simple HTML parser for server-side use
+class HTMLParser {
+  parseFromString(html, mimeType) {
+    // Create a simple DOM-like structure
+    const dom = {
+      querySelectorAll: (selector) => this.querySelectorAll(html, selector),
+    };
+    return dom;
+  }
+
+  querySelectorAll(html, selector) {
+    const elements = [];
+    
+    if (selector === 'a') {
+      // Find all anchor tags
+      const regex = /<a\s+[^>]*href=["']([^"']*)["'][^>]*>/gi;
+      let match;
+      while ((match = regex.exec(html)) !== null) {
+        elements.push({
+          getAttribute: (attr) => {
+            if (attr === 'href') return match[1];
+            return null;
+          }
+        });
+      }
+    } else if (selector === 'img') {
+      // Find all image tags
+      const regex = /<img\s+[^>]*src=["']([^"']*)["'][^>]*>/gi;
+      let match;
+      while ((match = regex.exec(html)) !== null) {
+        elements.push({
+          getAttribute: (attr) => {
+            if (attr === 'src') return match[1];
+            return null;
+          }
+        });
+      }
+    }
+    
+    return elements;
   }
 }
