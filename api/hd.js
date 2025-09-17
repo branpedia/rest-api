@@ -46,34 +46,6 @@ const s = {
         }
     },
 
-    // Fungsi untuk mengupload gambar hasil ke server Anda
-    async uploadToMyServer(imageBuffer, filename) {
-        try {
-            // Implementasi upload ke server Anda di sini
-            // Contoh menggunakan FormData untuk upload
-            const formData = new FormData();
-            const blob = new Blob([imageBuffer], { type: 'image/jpeg' });
-            formData.append('file', blob, filename);
-            
-            // Ganti dengan endpoint upload server Anda
-            const uploadResponse = await fetch('https://rest-api-ten-smoky.vercel.app/api/upload', {
-                method: 'POST',
-                body: formData
-            });
-            
-            if (!uploadResponse.ok) {
-                throw new Error(`Upload to my server failed: ${uploadResponse.status}`);
-            }
-            
-            const uploadResult = await uploadResponse.json();
-            return uploadResult.url; // URL gambar di server Anda
-        } catch (error) {
-            console.error('Upload to my server error:', error);
-            // Fallback ke URL original jika upload gagal
-            throw error;
-        }
-    },
-
     async uploadImage(imageBuffer, scaleRatio) {
         const pathname = '/api/UpscalerNew/UploadNew'
         const url = new URL(pathname, this.baseUrl)
@@ -131,37 +103,11 @@ const s = {
             const statusResult = await this.checkStatus(code, scaleRatio)
 
             if (statusResult.code === 200 && statusResult.data.status === 'success') {
-                // Download gambar hasil dari imglarger
-                const imageResponse = await fetch(statusResult.data.downloadUrls[0]);
-                if (!imageResponse.ok) {
-                    throw new Error('Failed to download upscaled image');
-                }
-                
-                const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
-                
-                // Upload ke server Anda
-                try {
-                    const myServerUrl = await this.uploadToMyServer(
-                        imageBuffer, 
-                        `upscaled_${scaleRatio}x_${Date.now()}.jpg`
-                    );
-                    
-                    return {
-                        success: true,
-                        downloadUrls: [myServerUrl], // Gunakan URL server Anda
-                        filesize: statusResult.data.filesize,
-                        originalfilename: statusResult.data.originalfilename,
-                        originalUrl: statusResult.data.downloadUrls[0] // Simpan URL original juga
-                    };
-                } catch (uploadError) {
-                    // Jika upload ke server gagal, kembalikan URL original
-                    console.error('Failed to upload to my server, using original URL:', uploadError);
-                    return {
-                        success: true,
-                        downloadUrls: statusResult.data.downloadUrls,
-                        filesize: statusResult.data.filesize,
-                        originalfilename: statusResult.data.originalfilename
-                    };
+                return {
+                    success: true,
+                    downloadUrls: statusResult.data.downloadUrls,
+                    filesize: statusResult.data.filesize,
+                    originalfilename: statusResult.data.originalfilename
                 }
             }
 
@@ -202,7 +148,7 @@ export default async function handler(request, response) {
 
     // Handle GET request with URL parameter
     if (request.method === 'GET') {
-        const { url: imageUrl, scale = 4, retry = 0 } = request.query; // Default scale 4x
+        const { url: imageUrl, scale = 2, retry = 0 } = request.query;
 
         if (!imageUrl) {
             return response.status(400).json({ success: false, error: 'Parameter url diperlukan' });
@@ -233,7 +179,7 @@ export default async function handler(request, response) {
     } 
     // Handle POST request with base64 image
     else if (request.method === 'POST') {
-        const { image, scale = 4, retry = 0 } = request.body; // Default scale 4x
+        const { image, scale = 2, retry = 0 } = request.body;
 
         if (!image) {
             return response.status(400).json({ success: false, error: 'Parameter image diperlukan (base64 encoded)' });
@@ -267,9 +213,7 @@ export default async function handler(request, response) {
                 scale: scaleNum,
                 downloadUrls: result.downloadUrls,
                 filesize: result.filesize,
-                originalfilename: result.originalfilename,
-                // Sertakan informasi tambahan jika ada
-                ...(result.originalUrl && { originalUrl: result.originalUrl })
+                originalfilename: result.originalfilename
             }
         });
 
