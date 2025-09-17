@@ -1,285 +1,333 @@
-import cloudscraper from 'cloudscraper';
-import { JSDOM } from 'jsdom';
-import puppeteer from 'puppeteer';
-
-export default async function handler(request, response) {
+// api/youtube-download.js
+export default async function handler(req, res) {
   // Set CORS headers
-  response.setHeader('Access-Control-Allow-Credentials', true);
-  response.setHeader('Access-Control-Allow-Origin', '*');
-  response.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  response.setHeader(
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
     'Access-Control-Allow-Headers',
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
   );
 
-  // Handle OPTIONS request for CORS
-  if (request.method === 'OPTIONS') {
-    response.status(200).end();
+  // Handle OPTIONS request
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
     return;
   }
 
   // Only allow GET requests
-  if (request.method !== 'GET') {
-    return response.status(405).json({ success: false, error: 'Method not allowed' });
+  if (req.method !== 'GET') {
+    return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const { url, quality = '128' } = request.query;
+  const { url, format = 'audio' } = req.query;
 
   if (!url) {
-    return response.status(400).json({ success: false, error: 'Parameter URL diperlukan' });
+    return res.status(400).json({ success: false, error: 'URL parameter is required' });
   }
 
   try {
     // Validate YouTube URL
-    if (!url.includes('youtube.com/') && !url.includes('youtu.be/')) {
-      return response.status(400).json({ success: false, error: 'URL tidak valid. Pastikan URL berasal dari YouTube.' });
+    if (!isValidYouTubeUrl(url)) {
+      return res.status(400).json({ success: false, error: 'Invalid YouTube URL' });
     }
 
     let result;
     
+    // Try first method (ytmp3.wf)
     try {
-      // First try with cloudscraper
-      result = await convertToMp3WithCloudscraper(url, quality);
-    } catch (error) {
-      console.log('Cloudscraper failed, trying with Puppeteer...');
+      console.log('Trying first method (ytmp3.wf)...');
+      result = await downloadWithFirstMethod(url, format);
+    } catch (error1) {
+      console.log('First method failed:', error1.message);
       
-      // If cloudscraper fails, use Puppeteer as fallback
-      result = await convertToMp3WithPuppeteer(url, quality);
+      // If first method fails, try second method
+      try {
+        console.log('Trying second method (savetube.me)...');
+        result = await downloadWithSecondMethod(url);
+      } catch (error2) {
+        console.log('Second method failed:', error2.message);
+        throw new Error('All download methods failed');
+      }
     }
 
-    return response.status(200).json({
+    return res.status(200).json({
       success: true,
-      data: {
-        title: result.title,
-        downloadUrl: result.downloadUrl,
-        quality: result.quality,
-        duration: result.duration,
-        thumbnail: result.thumbnail,
-        filesize: result.filesize
-      }
+      data: result
     });
 
   } catch (error) {
-    console.error('Error in YouTube to MP3 converter:', error);
-    return response.status(500).json({ 
+    console.error('Error:', error.message);
+    return res.status(500).json({ 
       success: false, 
-      error: 'Gagal mengambil audio dari YouTube. Pastikan URL valid dan coba lagi.' 
+      error: error.message || 'Failed to download audio' 
     });
   }
 }
 
-// Convert ke MP3 menggunakan Cloudscraper
-async function convertToMp3WithCloudscraper(url, quality) {
-  try {
-    // STEP 1: SEARCH - Get video info
-    const searchResponse = await cloudscraper.post({
-      uri: 'https://ssvid.net/api/ajaxSearch/index',
-      form: { query: url },
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Origin': 'https://ssvid.net',
-        'Referer': 'https://ssvid.net/'
-      }
-    });
-
-    const searchData = JSON.parse(searchResponse);
-
-    if (!searchData || !searchData.vid) {
-      throw new Error('Video tidak ditemukan di ssvid.net');
-    }
-
-    // Get token for the requested MP3 quality
-    let token;
-    let selectedQuality = quality;
-    
-    // MP3 quality mapping
-    const qualityMap = {
-      '128': searchData?.links?.mp3?.["128"]?.k,
-      '192': searchData?.links?.mp3?.["192"]?.k,
-      '320': searchData?.links?.mp3?.["320"]?.k
-    };
-
-    // If requested quality not available, try 128
-    token = qualityMap[quality] || qualityMap['128'];
-    
-    // If 128 not available, try any available quality
-    if (!token) {
-      for (const q in qualityMap) {
-        if (qualityMap[q]) {
-          token = qualityMap[q];
-          selectedQuality = q;
-          break;
-        }
-      }
-    }
-
-    if (!token) {
-      throw new Error("Token konversi untuk MP3 tidak ditemukan.");
-    }
-
-    const vid = searchData.vid;
-
-    // STEP 2: CONVERT - Get download link
-    const convertResponse = await cloudscraper.post({
-      uri: 'https://ssvid.net/api/ajaxConvert/convert',
-      form: { vid, k: token },
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Origin': 'https://ssvid.net',
-        'Referer': 'https://ssvid.net/'
-      }
-    });
-
-    const convertData = JSON.parse(convertResponse);
-    
-    if (!convertData || !convertData.dlink) {
-      throw new Error("Download link tidak ditemukan.");
-    }
-
-    return {
-      title: searchData.title || "YouTube Audio",
-      downloadUrl: convertData.dlink,
-      quality: selectedQuality + 'kbps',
-      duration: searchData.duration,
-      thumbnail: searchData.image,
-      filesize: searchData?.links?.mp3?.[selectedQuality]?.size
-    };
-    
-  } catch (error) {
-    console.error('Cloudscraper MP3 conversion error:', error);
-    throw error;
-  }
+// Validate YouTube URL
+function isValidYouTubeUrl(url) {
+  const pattern = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)[\w-]+/;
+  return pattern.test(url);
 }
 
-// Convert ke MP3 menggunakan Puppeteer (fallback)
-async function convertToMp3WithPuppeteer(url, quality) {
-  let browser;
-  try {
-    browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox', 
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu'
-      ]
-    });
-    
-    const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-    
-    // Navigate to y2mate.com YouTube MP3 page
-    await page.goto('https://www.y2mate.com/youtube-mp3', { 
-      waitUntil: 'networkidle2',
-      timeout: 30000
-    });
-    
-    // Input the URL
-    await page.type('#txt-url', url);
-    
-    // Click the convert button
-    await page.click('#btn-submit');
-    
-    // Wait for conversion options to appear
-    await page.waitForSelector('.mp3-table', { timeout: 60000 });
-    
-    // Extract available MP3 qualities
-    const qualities = await page.$$eval('.mp3-table .table-bordered tbody tr', rows => {
-      return rows.map(row => {
-        const qualityCell = row.querySelector('td:first-child');
-        const sizeCell = row.querySelector('td:nth-child(2)');
-        const button = row.querySelector('a');
-        return {
-          quality: qualityCell ? qualityCell.textContent.trim() : '',
-          size: sizeCell ? sizeCell.textContent.trim() : '',
-          onClick: button ? button.getAttribute('onclick') : ''
-        };
-      });
-    });
-    
-    // Find the requested quality or the best available
-    let selectedQuality = quality;
-    let selectedOnClick = '';
-    
-    // Try to find exact match first
-    const exactMatch = qualities.find(q => q.quality.includes(quality + 'kbps'));
-    if (exactMatch) {
-      selectedOnClick = exactMatch.onClick;
-    } else {
-      // If exact match not found, try to find the best available quality
-      const qualityOrder = ['320', '192', '128'];
-      for (const q of qualityOrder) {
-        const match = qualities.find(item => item.quality.includes(q + 'kbps'));
-        if (match) {
-          selectedQuality = q;
-          selectedOnClick = match.onClick;
-          break;
+// First download method (ytmp3.wf)
+async function downloadWithFirstMethod(youtubeUrl, userFormat = 'audio') {
+  const yt = {
+    get url() {
+      return {
+        origin: 'https://convert.ytmp3.wf',
+      }
+    },
+
+    get randomCookie() {
+      const length = 26
+      const charset = '0123456789abcdefghijklmnopqrstuvwxyz'
+      const charsetArray = charset.split("")
+      const pickRandom = (array) => array[Math.floor(Math.random() * array.length)]
+      const result = Array.from({ length }, _ => pickRandom(charsetArray)).join("")
+      return result
+    },
+
+    formatHandling(userFormat) {
+      const validFormat = ['audio', 'best_video', '144p', '240p', '360p', '480p', '720p', '1080p', '1440p', '2160p']
+      if (!validFormat.includes(userFormat)) throw Error(`invalid format!. available format: ${validFormat.join(', ')}`)
+      let isVideo = false, quality = null
+      if (userFormat != 'audio') {
+        isVideo = true
+        if (userFormat == 'best_video') {
+          quality = '10000'
+        } else {
+          quality = userFormat.match(/\d+/)[0]
         }
+      }
+      return { isVideo, quality }
+    },
+
+    async download(youtubeUrl, userFormat = 'audio') {
+      // format handling
+      const f = this.formatHandling(userFormat)
+
+      // path decision
+      const pathButton = f.isVideo ? '/vidbutton/' : '/button/'
+      const pathConvert = f.isVideo ? '/vidconvert/' : '/convert/'
+
+      // generate random cookiie
+      const cookie = `PHPSESSID=${this.randomCookie}`
+      console.log('generate random cookie')
+
+      // client hit mirip axios :v 
+      const headers = {
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "cookie": cookie,
+        "referer": this.url.origin
       }
       
-      // If still not found, use the first available
-      if (!selectedOnClick && qualities.length > 0) {
-        selectedOnClick = qualities[0].onClick;
-        selectedQuality = qualities[0].quality.match(/\d+/)?.[0] || '128';
+      const hit = async (method, path, body, returnType = 'text') => {
+        try {
+          const url = `${this.url.origin}${path}`
+          const opts = { method, body, headers }
+          const r = await fetch(url, opts)
+          if (!r.ok) throw Error(`${r.status} ${r.statusText}\n${await r.text()}`)
+          const res = returnType == "json" ? await r.json() : await r.text()
+          return res
+        } catch (e) {
+          throw Error(`gagal hit ${path}. karena ${e.message}`)
+        }
       }
-    }
-    
-    if (!selectedOnClick) {
-      throw new Error('Tidak dapat menemukan kualitas audio yang sesuai');
-    }
-    
-    // Extract the function call from onClick
-    const match = selectedOnClick.match(/\(\'([^']+)\',\'([^']+)\',\'([^']+)\'\)/);
-    if (!match) {
-      throw new Error('Format onClick tidak dikenali');
-    }
-    
-    const [, k, vid, type] = match;
-    
-    // Click the download button
-    await page.evaluate((k, vid, type) => {
-      // This function will be executed in the browser context
-      const event = new Event('click');
-      const element = document.querySelector(`a[onclick*="${k}"]`);
-      if (element) {
-        element.dispatchEvent(event);
+
+      // first hit
+      const html = await hit('get', `${pathButton}?url=${youtubeUrl}`)
+      console.log(`button hit`)
+      let m1 = html.match(/data: (.+?)\n\t\t\t\tsuccess/ms)?.[1].replace('},', '}').trim()
+      if (f.isVideo) {
+        m1 = m1.replace(`$('#height').val()`, f.quality)
       }
-    }, k, vid, type);
-    
-    // Wait for download link to appear
-    await page.waitForSelector('#process-result .btn-file', { timeout: 120000 });
-    
-    // Get download link and title
-    const downloadUrl = await page.$eval('#process-result .btn-file', el => el.href);
-    const title = await page.$eval('.caption-text', el => el.textContent.trim());
-    
-    await browser.close();
-    
-    return {
-      title: title,
-      downloadUrl: downloadUrl,
-      quality: selectedQuality + 'kbps',
-      duration: null,
-      thumbnail: null,
-      filesize: null
-    };
-    
-  } catch (error) {
-    if (browser) await browser.close();
-    console.error('Puppeteer MP3 conversion error:', error);
-    throw error;
+      const payload = eval("(" + m1 + ")")
+
+      // second hit
+      headers.referer = `${this.url.origin}${pathButton}?url=${youtubeUrl}`
+      headers.origin = this.url.origin,
+      headers["x-requested-with"] = "XMLHttpRequest"
+      const j2 = await hit('post', pathConvert, new URLSearchParams(payload), 'json')
+      console.log(`convert hit`)
+
+      // progress checking
+      let j3, fetchCount = 0
+      const MAX_FETCH_ATTEMPT = 60
+
+      do {
+        fetchCount++
+        j3 = await hit('get', `${pathConvert}?jobid=${j2.jobid}&time=${Date.now()}`, null, 'json')
+        if (j3.dlurl) {
+          return j3
+        } else if (j3.error) {
+          throw Error(`oops.. ada kesalahan nih raw jsonnya i have no idea. mungkin video gak di support.\n${JSON.stringify(j3, null, 2)}`)
+        }
+        let print
+        if (/^Downloading audio data/.test(j3.retry)) {
+          const match = j3.retry.match(/^(.+?)<(?:.+?)valuenow="(.+?)" /)
+          print = `${match[1]} ${match[2]}%`
+        } else {
+          print = j3.retry.match(/^(.+?)</)?.[1] || `unknown status`
+        }
+        console.log(print)
+        await new Promise(re => setTimeout(re, 3000))
+
+      } while (fetchCount < MAX_FETCH_ATTEMPT)
+      throw Error(`mencapai maksimal limit fetch`)
+    }
   }
+
+  const result = await yt.download(youtubeUrl, userFormat);
+  
+  // Extract title from URL if possible
+  let title = "YouTube Audio";
+  try {
+    const titleMatch = result.dlurl.match(/title=([^&]+)/);
+    if (titleMatch) {
+      title = decodeURIComponent(titleMatch[1]);
+    }
+  } catch (e) {
+    console.log('Could not extract title from URL');
+  }
+  
+  return {
+    title: title,
+    downloadUrl: result.dlurl,
+    format: userFormat === 'audio' ? 'mp3' : 'mp4',
+    quality: userFormat === 'audio' ? '128kbps' : userFormat
+  };
 }
 
-// Function to extract video ID from YouTube URL
-function extractVideoId(url) {
-  const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
-  const match = url.match(regExp);
-  return (match && match[7].length === 11) ? match[7] : null;
+// Second download method (savetube.me)
+async function downloadWithSecondMethod(youtubeUrl) {
+  class Youtubers {
+    constructor() {
+      this.hex = "C5D58EF67A7584E4A29F6C35BBC4EB12";
+    }
+
+    async uint8(hex) {
+      const pecahan = hex.match(/[\dA-F]{2}/gi);
+      if (!pecahan) throw new Error("Format tidak valid");
+      return new Uint8Array(pecahan.map(h => parseInt(h, 16)));
+    }
+
+    b64Byte(b64) {
+      const bersih = b64.replace(/\s/g, "");
+      const biner = Buffer.from(bersih, 'base64');
+      return new Uint8Array(biner);
+    }
+
+    async key() {
+      const raw = await this.uint8(this.hex);
+      return await crypto.subtle.importKey("raw", raw, { name: "AES-CBC" }, false, ["decrypt"]);
+    }
+
+    async Data(base64Terenkripsi) {
+      const byteData = this.b64Byte(base64Terenkripsi);
+      if (byteData.length < 16) throw new Error("Data terlalu pendek");
+
+      const iv = byteData.slice(0, 16);
+      const data = byteData.slice(16);
+
+      const kunci = await this.key();
+      const hasil = await crypto.subtle.decrypt(
+        { name: "AES-CBC", iv },
+        kunci,
+        data
+      );
+
+      const teks = new TextDecoder().decode(new Uint8Array(hasil));
+      return JSON.parse(teks);
+    }
+
+    async getCDN() {
+      let retries = 5
+      while (retries--) {
+        try {
+          const res = await fetch("https://media.savetube.me/api/random-cdn")
+          const data = await res.json()
+          if (data?.cdn) return data.cdn
+        } catch {}
+      }
+      throw new Error("Gagal ambil CDN setelah 5 percobaan")
+    }
+
+    async infoVideo(linkYoutube) {
+      const cdn = await this.getCDN();
+      const res = await fetch(`https://${cdn}/v2/info`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: linkYoutube }),
+      });
+
+      const hasil = await res.json();
+      if (!hasil.status) throw new Error(hasil.message||"Gagal ambil data video");
+
+      const isi = await this.Data(hasil.data);
+      return {
+        judul: isi.title,
+        durasi: isi.durationLabel,
+        thumbnail: isi.thumbnail,
+        kode: isi.key
+      };
+    }
+
+    async getDownloadLink(kodeVideo, kualitas) {
+      let retries = 5
+      while (retries--) {
+        try {
+          const cdn = await this.getCDN()
+          const res = await fetch(`https://${cdn}/download`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              downloadType: 'audio',
+              quality: kualitas,
+              key: kodeVideo,
+            }),
+          })
+
+          const json = await res.json()
+          if (json?.status && json?.data?.downloadUrl) {
+            return json.data.downloadUrl
+          }
+        } catch {}
+      }
+      throw new Error("Gagal ambil link unduh setelah 5 percobaan")
+    }
+
+    async downloadAudio(linkYoutube, kualitas = '128') {
+      try {
+        const data = await this.infoVideo(linkYoutube);
+        const linkUnduh = await this.getDownloadLink(data.kode, kualitas);
+        return {
+          status: true,
+          judul: data.judul,
+          durasi: data.durasi,
+          url: linkUnduh,
+        };
+      } catch (err) {
+        return {
+          status: false,
+          pesan: err.message
+        };
+      }
+    }
+  }
+
+  const yt = new Youtubers();
+  const result = await yt.downloadAudio(youtubeUrl, '128');
+  
+  if (!result.status) {
+    throw new Error(result.pesan);
+  }
+  
+  return {
+    title: result.judul,
+    downloadUrl: result.url,
+    format: 'mp3',
+    quality: '128kbps'
+  };
 }
