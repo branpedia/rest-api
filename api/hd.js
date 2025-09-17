@@ -1,3 +1,4 @@
+// api/hd.js (API utama)
 const s = {
     tools: {
         async hit(description, url, options, returnType = 'text') {
@@ -31,7 +32,7 @@ const s = {
         }
     },
 
-    // Fungsi baru untuk mendownload gambar dari URL
+    // Fungsi untuk mendownload gambar dari URL
     async downloadImageFromUrl(imageUrl) {
         try {
             const response = await fetch(imageUrl);
@@ -103,11 +104,17 @@ const s = {
             const statusResult = await this.checkStatus(code, scaleRatio)
 
             if (statusResult.code === 200 && statusResult.data.status === 'success') {
+                // Ganti URL dengan proxy URL kita
+                const originalUrl = statusResult.data.downloadUrls[0];
+                const filename = originalUrl.split('/').pop();
+                const proxyUrl = `https://rest-api-ten-smoky.vercel.app/api/hd-proxy?filename=${filename}&scale=${scaleRatio}`;
+                
                 return {
                     success: true,
-                    downloadUrls: statusResult.data.downloadUrls,
+                    downloadUrls: [proxyUrl], // Gunakan URL proxy kita
                     filesize: statusResult.data.filesize,
-                    originalfilename: statusResult.data.originalfilename
+                    originalfilename: statusResult.data.originalfilename,
+                    originalUrl: originalUrl // Simpan URL original untuk referensi
                 }
             }
 
@@ -148,7 +155,7 @@ export default async function handler(request, response) {
 
     // Handle GET request with URL parameter
     if (request.method === 'GET') {
-        const { url: imageUrl, scale = 2, retry = 0 } = request.query;
+        const { url: imageUrl, scale = 4, retry = 0 } = request.query;
 
         if (!imageUrl) {
             return response.status(400).json({ success: false, error: 'Parameter url diperlukan' });
@@ -179,7 +186,7 @@ export default async function handler(request, response) {
     } 
     // Handle POST request with base64 image
     else if (request.method === 'POST') {
-        const { image, scale = 2, retry = 0 } = request.body;
+        const { image, scale = 4, retry = 0 } = request.body;
 
         if (!image) {
             return response.status(400).json({ success: false, error: 'Parameter image diperlukan (base64 encoded)' });
@@ -211,7 +218,7 @@ export default async function handler(request, response) {
             success: true,
             data: {
                 scale: scaleNum,
-                downloadUrls: result.downloadUrls,
+                downloadUrls: result.downloadUrls, // Ini sudah URL proxy kita
                 filesize: result.filesize,
                 originalfilename: result.originalfilename
             }
@@ -226,18 +233,15 @@ export default async function handler(request, response) {
             await new Promise(resolve => setTimeout(resolve, 1000));
             
             if (request.method === 'GET') {
-                // For GET requests, we need to reconstruct the query
                 const newQuery = new URLSearchParams(request.query);
                 newQuery.set('retry', retryCount + 1);
                 
-                // Create a new request object with updated query
                 const newRequest = {
                     ...request,
                     query: Object.fromEntries(newQuery)
                 };
                 return handler(newRequest, response);
             } else {
-                // For POST requests
                 return handler({ 
                     ...request, 
                     body: { ...request.body, retry: retryCount + 1 } 
