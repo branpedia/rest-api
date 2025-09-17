@@ -1,4 +1,4 @@
-// api/hd.js (API utama)
+// api/hd.js
 const s = {
     tools: {
         async hit(description, url, options, returnType = 'text') {
@@ -104,14 +104,14 @@ const s = {
             const statusResult = await this.checkStatus(code, scaleRatio)
 
             if (statusResult.code === 200 && statusResult.data.status === 'success') {
-                // Ganti URL dengan proxy URL kita
+                // Ganti URL dengan format yang lebih simpel
                 const originalUrl = statusResult.data.downloadUrls[0];
                 const filename = originalUrl.split('/').pop();
-                const proxyUrl = `https://rest-api-ten-smoky.vercel.app/api/hd-proxy?filename=${filename}&scale=${scaleRatio}`;
+                const simpleUrl = `https://rest-api-ten-smoky.vercel.app/api/hd?result=${filename}&scale=${scaleRatio}`;
                 
                 return {
                     success: true,
-                    downloadUrls: [proxyUrl], // Gunakan URL proxy kita
+                    downloadUrls: [simpleUrl], // Gunakan URL simple kita
                     filesize: statusResult.data.filesize,
                     originalfilename: statusResult.data.originalfilename,
                     originalUrl: originalUrl // Simpan URL original untuk referensi
@@ -145,6 +145,45 @@ export default async function handler(request, response) {
         return;
     }
 
+    // Handle image proxy requests (GET dengan parameter result)
+    if (request.method === 'GET' && request.query.result) {
+        try {
+            const { result, scale = '2' } = request.query;
+
+            if (!result) {
+                return response.status(400).json({ error: 'Filename is required' });
+            }
+
+            // Reconstruct the original URL
+            const originalUrl = `https://get1.imglarger.com/upscaler/results/${result}`;
+            
+            // Fetch the original image from imglarger
+            const imageResponse = await fetch(originalUrl);
+            
+            if (!imageResponse.ok) {
+                throw new Error(`Failed to fetch image: ${imageResponse.status}`);
+            }
+            
+            // Get the image buffer and content type
+            const arrayBuffer = await imageResponse.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+            const contentType = imageResponse.headers.get('content-type') || 'image/jpeg';
+            
+            // Set appropriate headers and send the image
+            response.setHeader('Content-Type', contentType);
+            response.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
+            response.setHeader('Content-Disposition', `inline; filename="hd_${scale}x_${result}"`);
+            
+            response.status(200).send(buffer);
+            return;
+            
+        } catch (error) {
+            console.error('Image proxy error:', error);
+            return response.status(500).json({ error: 'Failed to fetch image' });
+        }
+    }
+
+    // Handle normal HD API requests
     // Allow both GET and POST requests
     if (request.method !== 'GET' && request.method !== 'POST') {
         return response.status(405).json({ success: false, error: 'Method not allowed' });
@@ -218,7 +257,7 @@ export default async function handler(request, response) {
             success: true,
             data: {
                 scale: scaleNum,
-                downloadUrls: result.downloadUrls, // Ini sudah URL proxy kita
+                downloadUrls: result.downloadUrls, // Ini sudah URL simple kita
                 filesize: result.filesize,
                 originalfilename: result.originalfilename
             }
