@@ -1,8 +1,4 @@
 // api/youtube-download.js
-import cloudscraper from 'cloudscraper';
-import { JSDOM } from 'jsdom';
-import puppeteer from 'puppeteer';
-
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -24,7 +20,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const { url, format = 'audio', retry = 0 } = req.query;
+  const { url, format = 'audio' } = req.query;
 
   if (!url) {
     return res.status(400).json({ success: false, error: 'URL parameter is required' });
@@ -38,7 +34,7 @@ export default async function handler(req, res) {
 
     let result;
     
-    // Try multiple methods with fallback
+    // Try first method (ytmp3.wf)
     try {
       console.log('Trying first method (ytmp3.wf)...');
       result = await downloadWithFirstMethod(url, format);
@@ -51,23 +47,7 @@ export default async function handler(req, res) {
         result = await downloadWithSecondMethod(url);
       } catch (error2) {
         console.log('Second method failed:', error2.message);
-        
-        // If second method fails, try third method (cloudscraper)
-        try {
-          console.log('Trying third method (cloudscraper)...');
-          result = await convertWithCloudscraper(url);
-        } catch (error3) {
-          console.log('Third method failed:', error3.message);
-          
-          // If third method fails, try fourth method (puppeteer)
-          try {
-            console.log('Trying fourth method (puppeteer)...');
-            result = await convertWithPuppeteer(url);
-          } catch (error4) {
-            console.log('Fourth method failed:', error4.message);
-            throw new Error('All download methods failed');
-          }
-        }
+        throw new Error('All download methods failed');
       }
     }
 
@@ -78,14 +58,6 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Error:', error.message);
-    
-    // Retry logic
-    if (retry < 3) {
-      // Wait for 1 second before retrying
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      return handler({ ...req, query: { ...req.query, retry: parseInt(retry) + 1 } }, res);
-    }
-    
     return res.status(500).json({ 
       success: false, 
       error: error.message || 'Failed to download audio' 
@@ -310,7 +282,7 @@ async function downloadWithSecondMethod(youtubeUrl) {
           const res = await fetch(`https://${cdn}/download`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body = JSON.stringify({
+            body: JSON.stringify({
               downloadType: 'audio',
               quality: kualitas,
               key: kodeVideo,
@@ -358,118 +330,4 @@ async function downloadWithSecondMethod(youtubeUrl) {
     format: 'mp3',
     quality: '128kbps'
   };
-}
-
-// Third download method (cloudscraper)
-async function convertWithCloudscraper(url) {
-  try {
-    // STEP 1: SEARCH - Get video info
-    const searchResponse = await cloudscraper.post({
-      uri: 'https://ssvid.net/api/ajaxSearch/index',
-      form: { query: url },
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Origin': 'https://ssvid.net',
-        'Referer': 'https://ssvid.net/'
-      }
-    });
-
-    const searchData = JSON.parse(searchResponse);
-
-    if (!searchData || !searchData.vid) {
-      throw new Error('Video tidak ditemukan di ssvid.net');
-    }
-
-    // Get token for m4a (fallback to mp3 if not available)
-    let format = "m4a";
-    let token = searchData?.links?.m4a?.["140"]?.k;
-
-    if (!token) {
-      format = "mp3";
-      token = searchData?.links?.mp3?.mp3128?.k;
-    }
-
-    if (!token) {
-      throw new Error("Token konversi untuk M4A/MP3 tidak ditemukan.");
-    }
-
-    const vid = searchData.vid;
-
-    // STEP 2: CONVERT - Get download link
-    const convertResponse = await cloudscraper.post({
-      uri: 'https://ssvid.net/api/ajaxConvert/convert',
-      form: { vid, k: token },
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Origin': 'https://ssvid.net',
-        'Referer': 'https://ssvid.net/'
-      }
-    });
-
-    const convertData = JSON.parse(convertResponse);
-    
-    if (!convertData || !convertData.dlink) {
-      throw new Error("Download link tidak ditemukan.");
-    }
-
-    return {
-      title: searchData.title || "YouTube Audio",
-      downloadUrl: convertData.dlink,
-      format: format,
-      quality: format === "mp3" ? "128kbps" : "140kbps"
-    };
-    
-  } catch (error) {
-    console.error('Cloudscraper conversion error:', error);
-    throw error;
-  }
-}
-
-// Fourth download method (puppeteer)
-async function convertWithPuppeteer(url) {
-  let browser;
-  try {
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-    
-    const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-    
-    // Navigate to ytmp3.cc
-    await page.goto('https://ytmp3.cc/en13/', { 
-      waitUntil: 'networkidle2',
-      timeout: 30000
-    });
-    
-    // Input the URL
-    await page.type('#input', url);
-    
-    // Click the convert button
-    await page.click('#submit');
-    
-    // Wait for conversion to complete
-    await page.waitForSelector('#download', { timeout: 60000 });
-    
-    // Get download link and title
-    const downloadUrl = await page.$eval('#download', el => el.href);
-    const title = await page.$eval('#title', el => el.value);
-    
-    await browser.close();
-    
-    return {
-      title: title,
-      downloadUrl: downloadUrl,
-      format: "mp3",
-      quality: "128kbps"
-    };
-    
-  } catch (error) {
-    if (browser) await browser.close();
-    console.error('Puppeteer conversion error:', error);
-    throw error;
-  }
 }
