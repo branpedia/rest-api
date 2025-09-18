@@ -1,236 +1,152 @@
-import cloudscraper from 'cloudscraper';
-import { JSDOM } from 'jsdom';
-import puppeteer from 'puppeteer';
-
-// Simple HTTP server tanpa Express
-const http = require('http');
-const url = require('url');
-
-const server = http.createServer(async (req, res) => {
-  // Set CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
-  // Handle OPTIONS request
-  if (req.method === 'OPTIONS') {
-    res.writeHead(200);
-    res.end();
-    return;
-  }
-  
-  // Only handle GET requests
-  if (req.method !== 'GET') {
-    res.writeHead(405);
-    res.end(JSON.stringify({ success: false, error: 'Method not allowed' }));
-    return;
-  }
-  
-  // Parse URL parameters
-  const parsedUrl = url.parse(req.url, true);
-  const { imageUrl, retry = 0 } = parsedUrl.query;
-  
-  if (!imageUrl) {
-    res.writeHead(400);
-    res.end(JSON.stringify({ success: false, error: 'Parameter imageUrl diperlukan' }));
-    return;
-  }
-  
-  try {
-    // Validate URL
-    try {
-      new URL(imageUrl);
-    } catch (error) {
-      res.writeHead(400);
-      res.end(JSON.stringify({ success: false, error: 'URL tidak valid' }));
-      return;
-    }
-    
-    let html;
-    let browser;
-
-    try {
-      // Use direct approach with Cloudscraper first
-      const encodedImageUrl = encodeURIComponent(imageUrl);
-      const searchUrl = `https://www.google.com/searchbyimage?image_url=${encodedImageUrl}`;
-      
-      html = await cloudscraper.get({
-        url: searchUrl,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-          'Accept-Encoding': 'gzip, deflate',
-          'Connection': 'keep-alive',
-          'Upgrade-Insecure-Requests': '1'
+const s = {
+  tools: {
+    async hit(description, url, options, returnType = 'text') {
+      try {
+        const response = await fetch(url, options);
+        if (!response.ok) {
+          throw new Error(`${response.status} ${response.statusText}\n${await response.text() || '(response body kosong)'}`);
         }
-      });
-    } catch (error) {
-      console.log('Cloudscraper failed, trying with Puppeteer...');
-      
-      // If cloudscraper fails, use Puppeteer
-      browser = await puppeteer.launch({
-        headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-web-security',
-          '--disable-features=IsolateOrigins,site-per-process'
-        ]
-      });
-      
-      const page = await browser.newPage();
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-      await page.setViewport({ width: 1280, height: 800 });
-      
-      // Navigate directly to searchbyimage
-      const encodedImageUrl = encodeURIComponent(imageUrl);
-      await page.goto(`https://www.google.com/searchbyimage?image_url=${encodedImageUrl}`, {
-        waitUntil: 'networkidle2',
-        timeout: 30000
-      });
-      
-      // Wait for results to load
-      await page.waitForTimeout(5000);
-      
-      html = await page.content();
-      if (browser) await browser.close();
-    }
-
-    // Parse the HTML with JSDOM
-    const dom = new JSDOM(html);
-    const document = dom.window.document;
-
-    // Extract related searches
-    const relatedSearches = [];
-    
-    // Method 1: Look for search result links
-    const searchResultElements = document.querySelectorAll('a[href*="/search"]');
-    for (const element of searchResultElements) {
-      const titleElement = element.querySelector('.I9S4yc, .Yt787, .UAiK1e, h3, .DKV0Md');
-      if (titleElement) {
-        const title = titleElement.textContent.trim();
-        const href = element.getAttribute('href');
-        
-        // Extract the actual URL from Google's redirect
-        let actualUrl = null;
-        if (href && href.includes('/url?')) {
-          const urlParams = new URLSearchParams(href.split('/url?')[1]);
-          actualUrl = urlParams.get('url');
+        if (returnType === 'text') {
+          const data = await response.text();
+          return { data, response };
+        } else if (returnType === 'json') {
+          const data = await response.json();
+          return { data, response };
+        } else {
+          throw new Error(`invalid returnType param.`);
         }
-        
-        relatedSearches.push({
-          title,
-          url: actualUrl || href
-        });
+      } catch (e) {
+        throw new Error(`hit ${description} failed. ${e.message}`);
       }
     }
-    
-    // Method 2: Look for image result links (alternative approach)
-    if (relatedSearches.length === 0) {
-      const imageResultElements = document.querySelectorAll('.Kg0xqe.sjVJQd, .g, .rc, .tF2Cxc');
-      for (const element of imageResultElements) {
-        const titleElement = element.querySelector('.I9S4yc, .Yt787, .UAiK1e, h3, .DKV0Md, .LC20lb');
-        const linkElement = element.querySelector('a');
-        
-        if (titleElement && linkElement) {
-          const title = titleElement.textContent.trim();
-          const href = linkElement.getAttribute('href');
-          
-          // Extract the actual URL from Google's redirect
-          let actualUrl = null;
-          if (href && href.includes('/url?')) {
-            const urlParams = new URLSearchParams(href.split('/url?')[1]);
-            actualUrl = urlParams.get('url');
-          }
-          
-          relatedSearches.push({
-            title,
-            url: actualUrl || href
-          });
-        }
-      }
+  },
+
+  get baseUrl() {
+    return 'https://serpapi.com';
+  },
+
+  get baseHeaders() {
+    return {
+      'accept-encoding': 'gzip, deflate, br, zstd',
+      'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0'
+    };
+  },
+
+  // Tidak perlu cookie karena SerpApi pakai API key
+  async getCookie() {
+    // SerpApi tidak butuh cookie — cukup API key
+    return { api_key: '99a605260e609bb3b58fbe12792cc316686cb7e10e447a38f6bd6360e6b68dbf' };
+  },
+
+  // Tidak perlu captcha handling karena SerpApi sudah menangani itu
+  async ifCaptcha() {
+    return {}; // dummy, tidak diperlukan
+  },
+
+  // Panggil API Google Lens SerpApi
+  async googleLens(imageUrl, api_key) {
+    const pathname = '/search.json';
+    const url = new URL(pathname, this.baseUrl);
+    const params = new URLSearchParams({
+      engine: 'google_lens',
+      url: imageUrl,
+      api_key: api_key
+    });
+    url.search = params.toString();
+
+    const headers = this.baseHeaders;
+    const { data } = await this.tools.hit('Google Lens', url, { headers }, 'json');
+
+    if (data.error) {
+      throw new Error(data.error);
     }
-    
-    // Method 3: Look for "Buka" links specifically
-    const openLinks = document.querySelectorAll('a[class*="umNKYc"], a[href*="/url"]');
-    for (const element of openLinks) {
-      const titleElement = element.closest('.g, .tF2Cxc, .MjjYud')?.querySelector('.LC20lb, .DKV0Md, h3');
-      if (titleElement) {
-        const title = titleElement.textContent.trim();
-        const href = element.getAttribute('href');
-        
-        // Extract the actual URL from Google's redirect
-        let actualUrl = null;
-        if (href && href.includes('/url?')) {
-          const urlParams = new URLSearchParams(href.split('/url?')[1]);
-          actualUrl = urlParams.get('url');
-        }
-        
-        relatedSearches.push({
-          title,
-          url: actualUrl || href
-        });
-      }
-    }
-    
-    // Remove duplicates
-    const uniqueSearches = relatedSearches.filter((search, index, self) =>
-      index === self.findIndex(s => s.title === search.title && s.url === search.url)
-    );
 
-    // Extract main image
-    const mainImageElement = document.querySelector('.VeBrne, img[alt*="Image result"], .J9sbhc img');
-    const mainImage = mainImageElement ? mainImageElement.src : null;
-
-    // Extract search URL
-    const searchUrl = dom.window.location.href;
-
-    // Send response
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      success: true,
-      data: {
-        searchUrl,
-        mainImage,
-        relatedSearches: uniqueSearches.slice(0, 10) // Limit to 10 results
-      }
+    // Ekstrak data penting
+    const visualMatches = (data.visual_matches || []).map(match => ({
+      title: match.title,
+      link: match.link,
+      source: match.source,
+      thumbnail: match.thumbnail,
+      image: match.image
     }));
 
+    const relatedSearches = (data.related_content || []).map(item => ({
+      title: item.query,
+      url: item.link
+    }));
+
+    return {
+      searchUrl: data.search_metadata?.google_lens_url || `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(imageUrl)}`,
+      mainImage: imageUrl,
+      visualMatches: visualMatches.slice(0, 10),
+      relatedSearches: relatedSearches.slice(0, 5)
+    };
+  },
+
+  // Fungsi utama: ambil gambar, kembalikan hasil Google Lens
+  async analyze(imageUrl) {
+    const { api_key } = await this.getCookie();
+    const result = await this.googleLens(imageUrl, api_key);
+    return result;
+  }
+};
+
+export default async function handler(request, response) {
+  // Set CORS headers
+  response.setHeader('Access-Control-Allow-Credentials', true);
+  response.setHeader('Access-Control-Allow-Origin', '*');
+  response.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  response.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+  );
+
+  // Handle OPTIONS request for CORS
+  if (request.method === 'OPTIONS') {
+    response.status(200).end();
+    return;
+  }
+
+  // Only allow GET requests
+  if (request.method !== 'GET') {
+    return response.status(405).json({ success: false, error: 'Method not allowed' });
+  }
+
+  const { imageUrl, retry = 0 } = request.query;
+
+  if (!imageUrl) {
+    return response.status(400).json({ success: false, error: 'Parameter imageUrl diperlukan' });
+  }
+
+  try {
+    // Validasi URL gambar
+    new URL(imageUrl); // akan throw jika tidak valid
+    if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+      throw new Error('URL harus menggunakan protokol http atau https');
+    }
+
+    // Panggil SerpApi Google Lens
+    const result = await s.analyze(imageUrl);
+
+    return response.status(200).json({
+      success: true,
+      data: result
+    });
+
   } catch (error) {
-    console.error('Error fetching Google Lens data:', error);
-    
+    console.error('Error fetching Google Lens data:', error.message);
+
     // Retry logic
     if (parseInt(retry) < 2) {
       console.log(`Retrying... Attempt ${parseInt(retry) + 1}`);
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Create new URL with retry parameter
-      const newUrl = url.parse(req.url, true);
-      newUrl.query.retry = parseInt(retry) + 1;
-      
-      // Recursive call for retry
-      return server.emit('request', req, res);
+      return handler({ ...request, query: { ...request.query, retry: parseInt(retry) + 1 } }, response);
     }
-    
-    res.writeHead(500);
-    res.end(JSON.stringify({ 
-      success: false, 
-      error: 'Gagal mengambil data dari Google Lens. Pastikan URL gambar valid dan coba lagi.',
+
+    return response.status(500).json({
+      success: false,
+      error: 'Gagal mengambil data dari Google Lens. Pastikan URL gambar valid, bisa diakses publik, dan API key SerpApi aktif.',
       details: error.message
-    }));
+    });
   }
-});
-
-const port = process.env.PORT || 3000;
-server.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
-
-// Handle graceful shutdown
-process.on('SIGINT', () => {
-  console.log('Shutting down gracefully...');
-  server.close(() => {
-    process.exit(0);
-  });
-});
+}
