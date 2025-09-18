@@ -1,155 +1,107 @@
 import cloudscraper from 'cloudscraper';
+import puuter from 'puuter';
 import { JSDOM } from 'jsdom';
 
-const c = {
+const s = {
     tools: {
-        async cloudscraperRequest(options) {
+        async hit(description, url, options, returnType = 'text') {
             try {
-                return new Promise((resolve, reject) => {
-                    cloudscraper(options, (error, response, body) => {
-                        if (error) {
-                            reject(error);
-                        } else {
-                            resolve({ response, data: body });
-                        }
+                const response = await new Promise((resolve, reject) => {
+                    cloudscraper.get({
+                        url,
+                        headers: options.headers || {},
+                        gzip: true
+                    }, (err, res, body) => {
+                        if (err) reject(err);
+                        else resolve({ res, body });
                     });
                 });
+
+                const { res, body } = response;
+                if (res.statusCode !== 200) {
+                    throw new Error(`${res.statusCode} ${res.statusMessage}\n${body || '(response body kosong)'}`);
+                }
+
+                if (returnType === 'text') {
+                    return { data: body, response: res };
+                } else if (returnType === 'dom') {
+                    const dom = new JSDOM(body, { runScripts: "dangerously", resources: "usable" });
+                    await puuter.until(() => {
+                        const descDetail = dom.window.document.querySelector('p.desc-detail');
+                        const clipSpan = dom.window.document.querySelector('span.detail-extra-span');
+                        return descDetail && clipSpan;
+                    }, 5000, 500); // Tunggu maks 5 detik, cek tiap 500ms
+                    return { dom, response: res };
+                } else {
+                    throw new Error(`invalid returnType param.`);
+                }
             } catch (e) {
-                throw Error(`Cloudscraper request failed: ${e.message}`);
+                throw new Error(`hit ${description} failed. ${e.message}`);
             }
         }
     },
 
     get baseUrl() {
-        return 'https://vidburner.com';
+        return 'https://www.capcut.com';
     },
 
-    async getToken() {
-        const url = `${this.baseUrl}/capcut-video-downloader/`;
-        
-        try {
-            const { data } = await this.tools.cloudscraperRequest({
-                uri: url,
-                method: 'GET'
-            });
-
-            const dom = new JSDOM(data);
-            const document = dom.window.document;
-            const tokenInput = document.querySelector('input#token');
-            
-            if (!tokenInput) {
-                throw new Error('Token input not found');
-            }
-            
-            return tokenInput.value;
-        } catch (error) {
-            console.error('Error getting token:', error);
-            throw new Error('Failed to get token from vidburner');
-        }
-    },
-
-    async getDownloadInfo(capcutUrl, token) {
-        const url = `${this.baseUrl}/wp-admin/admin-ajax.php`;
-        
-        const formData = {
-            action: 'aio_download_video',
-            url: capcutUrl,
-            token: token,
-            source: 'capcut'
-        };
-
-        try {
-            const { data } = await this.tools.cloudscraperRequest({
-                uri: url,
-                method: 'POST',
-                form: formData,
-                headers: {
-                    'Referer': `${this.baseUrl}/capcut-video-downloader/`,
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                }
-            });
-
-            return JSON.parse(data);
-        } catch (error) {
-            console.error('Error getting download info:', error);
-            throw new Error('Failed to get download information');
-        }
-    },
-
-    async getDownloadLink(sid, media) {
-        const url = `${this.baseUrl}/wp-content/plugins/aio-video-downloader/download.php?source=capcut&media=${media}&sid=${sid}&start=1`;
-        
-        try {
-            // We need to follow redirects manually with cloudscraper
-            const { response } = await this.tools.cloudscraperRequest({
-                uri: url,
-                method: 'GET',
-                followAllRedirects: false,
-                headers: {
-                    'Referer': `${this.baseUrl}/capcut-video-downloader/`
-                }
-            });
-
-            // Check for redirect
-            if (response.statusCode >= 300 && response.statusCode < 400) {
-                return response.headers.location;
-            }
-            
-            throw new Error('No redirect location found');
-        } catch (error) {
-            console.error('Error getting download link:', error);
-            throw new Error('Failed to get download link');
-        }
-    },
-
-    async getFinalDownloadUrl(downloadUrl) {
-        try {
-            const { response } = await this.tools.cloudscraperRequest({
-                uri: downloadUrl,
-                method: 'GET',
-                followAllRedirects: false
-            });
-
-            // Follow redirects until we get the final URL
-            if (response.statusCode >= 300 && response.statusCode < 400) {
-                return response.headers.location;
-            }
-            
-            return downloadUrl;
-        } catch (error) {
-            console.error('Error getting final download URL:', error);
-            return downloadUrl; // Return original URL as fallback
-        }
-    },
-
-    async download(capcutUrl) {
-        // Step 1: Get token from the page
-        const token = await this.getToken();
-        
-        // Step 2: Get download info (SID and media)
-        const downloadInfo = await this.getDownloadInfo(capcutUrl, token);
-        
-        if (!downloadInfo || !downloadInfo.success) {
-            throw Error(downloadInfo?.message || 'Gagal mendapatkan informasi download');
-        }
-        
-        // Step 3: Get the actual download link
-        const downloadLink = await this.getDownloadLink(downloadInfo.sid, downloadInfo.media);
-        
-        // Step 4: Get final download URL after waiting period
-        const finalDownloadUrl = await this.getFinalDownloadUrl(downloadLink);
-        
+    get baseHeaders() {
         return {
-            success: true,
-            sid: downloadInfo.sid,
-            media: downloadInfo.media,
-            downloadUrl: finalDownloadUrl,
-            filename: downloadInfo.filename || 'capcut_video.mp4',
-            title: downloadInfo.title || 'CapCut Video'
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'accept-language': 'en-US,en;q=0.5',
+            'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36',
+            'upgrade-insecure-requests': '1',
+            'sec-fetch-dest': 'document',
+            'sec-fetch-mode': 'navigate',
+            'sec-fetch-site': 'none',
+            'sec-fetch-user': '?1',
+        }
+    },
+
+    async scrapePage(url) {
+        const { dom } = await this.tools.hit('CapCut page', url, { headers: this.baseHeaders }, 'dom');
+
+        const doc = dom.window.document;
+
+        // 1. Creator
+        const creatorEl = doc.querySelector('span.author-name');
+        const creator = creatorEl ? creatorEl.textContent.trim() : "Not found";
+
+        // 2. Title
+        const titleEl = doc.querySelector('h1.template-title');
+        const title = titleEl ? titleEl.textContent.trim() : "Not found";
+
+        // 3. Info (actions-detail)
+        const infoEl = doc.querySelector('p.actions-detail');
+        const info = infoEl ? infoEl.textContent.trim() : "Not found";
+
+        // 4. Video URL
+        const videoEl = doc.querySelector('video.player');
+        const videoSrc = videoEl ? videoEl.getAttribute('src') : "Not found";
+
+        // 5. Hashtags (desc-detail)
+        const hashtagEl = doc.querySelector('p.desc-detail');
+        const hashtags = hashtagEl ? hashtagEl.textContent.trim() : "#NotFound";
+
+        // 6. Clip Info (detail-extra-span)
+        const clipEl = doc.querySelector('span.detail-extra-span');
+        const clipInfo = clipEl ? clipEl.textContent.trim() : "Clip info not found";
+
+        return {
+            creator,
+            title,
+            info,
+            videoSrc,
+            hashtags,
+            clipInfo
         };
+    },
+
+    async download(url) {
+        const data = await this.scrapePage(url);
+        return data;
     }
-}
+};
 
 export default async function handler(request, response) {
     // Set CORS headers
@@ -172,7 +124,7 @@ export default async function handler(request, response) {
         return response.status(405).json({ success: false, error: 'Method not allowed' });
     }
 
-    const { url, retry = 0 } = request.query;
+    const { url } = request.query;
 
     if (!url) {
         return response.status(400).json({ success: false, error: 'Parameter URL diperlukan' });
@@ -180,54 +132,30 @@ export default async function handler(request, response) {
 
     try {
         // Validate CapCut URL
-        if (!url.includes('capcut.com') || (!url.includes('/tv/') && !url.includes('/tv2/'))) {
-            return response.status(400).json({ success: false, error: 'URL tidak valid. Pastikan URL berasal dari CapCut.' });
+        if (!url.includes('capcut.com') || !url.includes('/tv2/')) {
+            return response.status(400).json({ success: false, error: 'URL tidak valid. Pastikan URL dari CapCut dan berisi /tv2/' });
         }
 
-        // Download video data
-        const result = await c.download(url);
-
-        // Get file size information
-        let fileSize = 'Unknown';
-        try {
-            const { response } = await c.tools.cloudscraperRequest({
-                uri: result.downloadUrl,
-                method: 'HEAD'
-            });
-            
-            const contentLength = response.headers['content-length'];
-            if (contentLength) {
-                const sizeInMB = parseInt(contentLength) / (1024 * 1024);
-                fileSize = `${sizeInMB.toFixed(2)} MB`;
-            }
-        } catch (sizeError) {
-            console.log('Could not determine file size:', sizeError);
-        }
+        // Scrape data
+        const result = await s.download(url);
 
         return response.status(200).json({
             success: true,
             data: {
+                creator: result.creator,
                 title: result.title,
-                downloadUrl: result.downloadUrl,
-                filename: result.filename,
-                size: fileSize,
-                extension: 'mp4'
+                info: result.info,
+                videoUrl: result.videoSrc,
+                hashtags: result.hashtags,
+                clipInfo: result.clipInfo
             }
         });
 
     } catch (error) {
         console.error('Error fetching CapCut data:', error);
-        
-        // Retry logic
-        if (retry < 2) {
-            // Wait for 1 second before retrying
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            return handler({ ...request, query: { ...request.query, retry: parseInt(retry) + 1 } }, response);
-        }
-        
-        return response.status(500).json({ 
-            success: false, 
-            error: error.message || 'Gagal mengambil data dari CapCut. Pastikan URL valid dan coba lagi.' 
+        return response.status(500).json({
+            success: false,
+            error: 'Gagal mengambil data dari CapCut. Coba lagi nanti.'
         });
     }
 }
