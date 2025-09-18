@@ -37,12 +37,12 @@ const s = {
     return { api_key: '99a605260e609bb3b58fbe12792cc316686cb7e10e447a38f6bd6360e6b68dbf' };
   },
 
-  // Tidak perlu CAPTCHA handling — SerpApi sudah menangani
+  // Tidak perlu CAPTCHA — SerpApi sudah handle
   async ifCaptcha() {
     return {};
   },
 
-  // 🔥 Fungsi utama: panggil Google Lens API SerpApi
+  // 🔥 Fungsi inti: panggil Google Lens API SerpApi dengan semua field asli
   async googleLens(imageUrl, options = {}) {
     const { api_key } = await this.getCookie();
     const { hl = 'en', country = 'us', type = 'visual_matches', q = '' } = options;
@@ -74,54 +74,57 @@ const s = {
       throw new Error('Google Lens hasn\'t returned any results for this query.');
     }
 
-    // Ekstrak data relevan
+    // 🚨 EXTRACT SEMUA DATA SESUAI ASLI — TANPA DIUBAH!
     const visualMatches = (data.visual_matches || []).map(match => ({
+      position: match.position, // ✅ Wajib ada, sesuai urutan
       title: match.title,
       link: match.link,
       source: match.source,
       thumbnail: match.thumbnail,
       image: match.image,
-      price: match.price,
-      in_stock: match.in_stock,
-      condition: match.condition,
-      rating: match.rating,
-      reviews: match.reviews
+      thumbnail_width: match.thumbnail_width,
+      thumbnail_height: match.thumbnail_height,
+      image_width: match.image_width,
+      image_height: match.image_height,
+      price: match.price || null,
+      in_stock: match.in_stock || null,
+      condition: match.condition || null,
+      rating: match.rating || null,
+      reviews: match.reviews || null
     }));
 
     const relatedSearches = (data.related_content || []).map(item => ({
       title: item.query,
-      url: item.link
+      url: item.link,
+      thumbnail: item.thumbnail,
+      serpapi_link: item.serpapi_link || null
     }));
 
     return {
       searchUrl: data.search_metadata?.google_lens_url || `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(imageUrl)}`,
       mainImage: imageUrl,
-      visualMatches: visualMatches.slice(0, 10),
-      relatedSearches: relatedSearches.slice(0, 5),
+      visualMatches, // ✅ Semua field asli, termasuk position
+      relatedSearches,
       metadata: {
         processedAt: data.search_metadata?.processed_at,
         total_time_taken: data.search_metadata?.total_time_taken,
-        id: data.search_metadata?.id
-      }
+        id: data.search_metadata?.id,
+        json_endpoint: data.search_metadata?.json_endpoint,
+        created_at: data.search_metadata?.created_at,
+        raw_html_file: data.search_metadata?.raw_html_file,
+        google_lens_url: data.search_metadata?.google_lens_url
+      },
+      search_parameters: data.search_parameters // ✅ Dikembalikan utuh
     };
   },
 
-  // Fungsi utama yang dipanggil oleh handler
+  // Fungsi utama untuk handler
   async analyze(imageUrl, options = {}) {
-    // Validasi awal URL
-    new URL(imageUrl); // throw jika tidak valid
+    // Validasi URL
+    new URL(imageUrl);
 
-    // Cek protokol
     if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
       throw new Error('URL gambar harus menggunakan http:// atau https://');
-    }
-
-    // Cek ekstensi gambar (opsional, untuk keamanan)
-    const validImageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tiff'];
-    const urlLower = imageUrl.toLowerCase();
-    const hasValidExt = validImageExtensions.some(ext => urlLower.endsWith(ext));
-    if (!hasValidExt) {
-      console.warn('Peringatan: URL gambar tidak memiliki ekstensi umum. Tetap dilanjutkan...');
     }
 
     const result = await this.googleLens(imageUrl, options);
@@ -157,12 +160,13 @@ export default async function handler(request, response) {
   }
 
   try {
-    // Buat objek opsi untuk googleLens
+    // Buat objek opsi
     const options = { hl, country, type, q };
 
     // Panggil SerpApi Google Lens
     const result = await s.analyze(imageUrl, options);
 
+    // Kirim respons JSON UTUH — tanpa menghapus satu field pun
     return response.status(200).json({
       success: true,
       data: result
