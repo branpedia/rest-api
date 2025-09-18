@@ -32,42 +32,60 @@ const s = {
     };
   },
 
-  // Tidak perlu cookie karena SerpApi pakai API key
+  // SerpApi tidak butuh cookie — cukup API key
   async getCookie() {
-    // SerpApi tidak butuh cookie — cukup API key
     return { api_key: '99a605260e609bb3b58fbe12792cc316686cb7e10e447a38f6bd6360e6b68dbf' };
   },
 
-  // Tidak perlu captcha handling karena SerpApi sudah menangani itu
+  // Tidak perlu CAPTCHA handling — SerpApi sudah menangani
   async ifCaptcha() {
-    return {}; // dummy, tidak diperlukan
+    return {};
   },
 
-  // Panggil API Google Lens SerpApi
-  async googleLens(imageUrl, api_key) {
+  // 🔥 Fungsi utama: panggil Google Lens API SerpApi
+  async googleLens(imageUrl, options = {}) {
+    const { api_key } = await this.getCookie();
+    const { hl = 'en', country = 'us', type = 'visual_matches', q = '' } = options;
+
     const pathname = '/search.json';
     const url = new URL(pathname, this.baseUrl);
+
     const params = new URLSearchParams({
       engine: 'google_lens',
       url: imageUrl,
-      api_key: api_key
+      api_key,
+      hl,
+      country,
+      type,
+      ...(q && { q }) // Hanya tambahkan jika ada
     });
+
     url.search = params.toString();
 
     const headers = this.baseHeaders;
     const { data } = await this.tools.hit('Google Lens', url, { headers }, 'json');
 
-    if (data.error) {
-      throw new Error(data.error);
+    // Cek status dari SerpApi
+    if (data.search_metadata?.status === 'Error') {
+      throw new Error(data.search_metadata?.error || 'Google Lens returned error');
     }
 
-    // Ekstrak data penting
+    if (data.search_metadata?.status !== 'Success') {
+      throw new Error('Google Lens hasn\'t returned any results for this query.');
+    }
+
+    // Ekstrak data relevan
     const visualMatches = (data.visual_matches || []).map(match => ({
       title: match.title,
       link: match.link,
       source: match.source,
       thumbnail: match.thumbnail,
-      image: match.image
+      image: match.image,
+      price: match.price,
+      in_stock: match.in_stock,
+      condition: match.condition,
+      rating: match.rating,
+      reviews: match.reviews
     }));
 
     const relatedSearches = (data.related_content || []).map(item => ({
@@ -79,14 +97,34 @@ const s = {
       searchUrl: data.search_metadata?.google_lens_url || `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(imageUrl)}`,
       mainImage: imageUrl,
       visualMatches: visualMatches.slice(0, 10),
-      relatedSearches: relatedSearches.slice(0, 5)
+      relatedSearches: relatedSearches.slice(0, 5),
+      metadata: {
+        processedAt: data.search_metadata?.processed_at,
+        total_time_taken: data.search_metadata?.total_time_taken,
+        id: data.search_metadata?.id
+      }
     };
   },
 
-  // Fungsi utama: ambil gambar, kembalikan hasil Google Lens
-  async analyze(imageUrl) {
-    const { api_key } = await this.getCookie();
-    const result = await this.googleLens(imageUrl, api_key);
+  // Fungsi utama yang dipanggil oleh handler
+  async analyze(imageUrl, options = {}) {
+    // Validasi awal URL
+    new URL(imageUrl); // throw jika tidak valid
+
+    // Cek protokol
+    if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+      throw new Error('URL gambar harus menggunakan http:// atau https://');
+    }
+
+    // Cek ekstensi gambar (opsional, untuk keamanan)
+    const validImageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tiff'];
+    const urlLower = imageUrl.toLowerCase();
+    const hasValidExt = validImageExtensions.some(ext => urlLower.endsWith(ext));
+    if (!hasValidExt) {
+      console.warn('Peringatan: URL gambar tidak memiliki ekstensi umum. Tetap dilanjutkan...');
+    }
+
+    const result = await this.googleLens(imageUrl, options);
     return result;
   }
 };
@@ -101,32 +139,29 @@ export default async function handler(request, response) {
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
   );
 
-  // Handle OPTIONS request for CORS
+  // Handle OPTIONS request
   if (request.method === 'OPTIONS') {
     response.status(200).end();
     return;
   }
 
-  // Only allow GET requests
+  // Hanya izinkan GET
   if (request.method !== 'GET') {
     return response.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const { imageUrl, retry = 0 } = request.query;
+  const { imageUrl, retry = 0, hl = 'en', country = 'us', type = 'visual_matches', q = '' } = request.query;
 
   if (!imageUrl) {
     return response.status(400).json({ success: false, error: 'Parameter imageUrl diperlukan' });
   }
 
   try {
-    // Validasi URL gambar
-    new URL(imageUrl); // akan throw jika tidak valid
-    if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
-      throw new Error('URL harus menggunakan protokol http atau https');
-    }
+    // Buat objek opsi untuk googleLens
+    const options = { hl, country, type, q };
 
     // Panggil SerpApi Google Lens
-    const result = await s.analyze(imageUrl);
+    const result = await s.analyze(imageUrl, options);
 
     return response.status(200).json({
       success: true,
@@ -146,7 +181,8 @@ export default async function handler(request, response) {
     return response.status(500).json({
       success: false,
       error: 'Gagal mengambil data dari Google Lens. Pastikan URL gambar valid, bisa diakses publik, dan API key SerpApi aktif.',
-      details: error.message
+      details: error.message,
+      hint: 'Gunakan URL dari imgur.com, wikimedia.org, atau unsplash.com. Contoh: https://i.imgur.com/HBrB8p0.png'
     });
   }
 }
