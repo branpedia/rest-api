@@ -1,4 +1,4 @@
-const s = {
+const lens = {
     tools: {
         async hit(description, url, options, returnType = 'text') {
             try {
@@ -20,97 +20,74 @@ const s = {
     },
 
     get baseUrl() {
-        return 'https://spotisongdownloader.to'
+        return 'https://serpapi.com'
     },
-    get baseHeaders() {
-        return {
-            'accept-encoding': 'gzip, deflate, br, zstd',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0'
-        }
-    },
-
-    async getCookie() {
-        const url = this.baseUrl
-        const headers = this.baseHeaders
-        const { response } = await this.tools.hit('homepage', url, { headers })
-
-        // auto deteksi node-fetch v2 / v3
-        let cookie
-        if (typeof response.headers.raw === 'function') {
-            // node-fetch v2
-            let rawCookies = response.headers.raw()['set-cookie'] || []
-            cookie = rawCookies[0]?.split('; ')?.[0]
-        } else {
-            // undici / node-fetch v3
-            cookie = response.headers.get('set-cookie')?.split('; ')?.[0]
-        }
-
-        if (!cookie?.length) throw Error(`gagal mendapatkan kuki`)
-        cookie += '; _ga=GA1.1.2675401.1754827078'
-        return { cookie }
+    
+    get apiKey() {
+        // Ganti dengan API key SerpAPI Anda
+        return '99a605260e609bb3b58fbe12792cc316686cb7e10e447a38f6bd6360e6b68dbf'
     },
 
-    async ifCaptcha(gcObject) {
-        const pathname = '/ifCaptcha.php'
+    async searchByImage(imageUrl) {
+        const pathname = '/search.json'
         const url = new URL(pathname, this.baseUrl)
+        
+        const params = {
+            engine: 'google_lens',
+            url: imageUrl,
+            api_key: this.apiKey
+        }
+        
+        url.search = new URLSearchParams(params)
+        
         const headers = {
-            referer: new URL(this.baseUrl).href,
-            ...gcObject,
-            ...this.baseHeaders
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36'
         }
-        await this.tools.hit('ifCaptcha', url, { headers })
-        return headers
-    },
-
-    async singleTrack(spotifyTrackUrl, icObject) {
-        const pathname = '/api/composer/spotify/xsingle_track.php'
-        const url = new URL(pathname, this.baseUrl)
-        url.search = new URLSearchParams({ url: spotifyTrackUrl })
-        const headers = icObject
-        const { data } = await this.tools.hit('single track', url, { headers }, 'json')
+        
+        const { data } = await this.tools.hit('google lens search', url, { headers }, 'json')
         return data
     },
 
-    async singleTrackHtml(stObject, icObj) {
-        const payload = [
-            stObject.song_name,
-            stObject.duration,
-            stObject.img,
-            stObject.artist,
-            stObject.url,
-            stObject.album_name,
-            stObject.released
-        ]
-        const pathname = '/track.php'
-        const url = new URL(pathname, this.baseUrl)
-        const headers = icObj
-        const body = new URLSearchParams({ data: JSON.stringify(payload) })
-        await this.tools.hit('track html', url, { headers, body, method: 'post' })
-        return true
-    },
+    async processResults(rawData) {
+        if (!rawData.visual_matches) {
+            return {
+                success: false,
+                error: 'Tidak ada hasil yang ditemukan',
+                results: []
+            }
+        }
 
-    async downloadUrl(spotifyTrackUrl, icObj, stObj) {
-        const pathname = '/api/composer/spotify/ssdw23456ytrfds.php'
-        const url = new URL(pathname, this.baseUrl)
-        const headers = icObj
-        const body = new URLSearchParams({
-            song_name: stObj.song_name || '',
-            artist_name: stObj.artist || '',
-            url: spotifyTrackUrl,
-            zip_download: 'false',
-            quality: 'm4a'
-        })
-        const { data } = await this.tools.hit('get download url', url, { headers, body, method: 'post' }, 'json')
-        return { ...data, ...stObj }
-    },
+        const results = rawData.visual_matches.map(item => ({
+            position: item.position,
+            title: item.title,
+            source: item.source,
+            sourceIcon: item.source_icon,
+            link: item.link,
+            thumbnail: item.thumbnail,
+            image: item.image,
+            imageWidth: item.image_width,
+            imageHeight: item.image_height
+        }))
 
-    async download(spotifyTrackUrl) {
-        const gcObj = await this.getCookie()
-        const icObj = await this.ifCaptcha(gcObj)
-        const stObj = await this.singleTrack(spotifyTrackUrl, icObj)
-        await this.singleTrackHtml(stObj, icObj)
-        const dlObj = await this.downloadUrl(spotifyTrackUrl, icObj, stObj)
-        return dlObj
+        const relatedContent = rawData.related_content ? rawData.related_content.map(item => ({
+            query: item.query,
+            link: item.link,
+            thumbnail: item.thumbnail
+        })) : []
+
+        return {
+            success: true,
+            metadata: {
+                searchId: rawData.search_metadata?.id,
+                status: rawData.search_metadata?.status,
+                processedAt: rawData.search_metadata?.processed_at,
+                totalTime: rawData.search_metadata?.total_time_taken,
+                googleLensUrl: rawData.search_metadata?.google_lens_url
+            },
+            results: results,
+            relatedContent: relatedContent,
+            totalResults: results.length
+        }
     }
 }
 
@@ -142,44 +119,22 @@ export default async function handler(request, response) {
     }
 
     try {
-        // Validate Spotify URL
-        if (!url.includes('spotify.com') || !url.includes('/track/')) {
-            return response.status(400).json({ success: false, error: 'URL tidak valid. Pastikan URL berasal dari Spotify dan berupa track.' });
+        // Validate image URL
+        if (!url.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i)) {
+            return response.status(400).json({ 
+                success: false, 
+                error: 'URL tidak valid. Pastikan URL mengarah ke gambar (jpg, png, gif, webp, bmp).' 
+            });
         }
 
-        // Download track data
-        const dl = await s.download(url);
+        // Search image using Google Lens
+        const rawData = await lens.searchByImage(url);
+        const processedData = await lens.processResults(rawData);
 
-        // Get file size information
-        let fileSize = 'Unknown';
-        try {
-            const headResponse = await fetch(dl.dlink, { method: 'HEAD' });
-            const contentLength = headResponse.headers.get('content-length');
-            if (contentLength) {
-                const sizeInMB = parseInt(contentLength) / (1024 * 1024);
-                fileSize = `${sizeInMB.toFixed(2)} MB`;
-            }
-        } catch (sizeError) {
-            console.log('Could not determine file size:', sizeError);
-        }
-
-        return response.status(200).json({
-            success: true,
-            data: {
-                title: dl.song_name,
-                artist: dl.artist,
-                duration: dl.duration,
-                album: dl.album_name,
-                released: dl.released,
-                size: fileSize,
-                extension: 'm4a',
-                coverUrl: dl.img,
-                downloadUrl: dl.dlink
-            }
-        });
+        return response.status(200).json(processedData);
 
     } catch (error) {
-        console.error('Error fetching Spotify data:', error);
+        console.error('Error fetching Google Lens data:', error);
         
         // Retry logic
         if (retry < 2) {
@@ -190,7 +145,7 @@ export default async function handler(request, response) {
         
         return response.status(500).json({ 
             success: false, 
-            error: 'Gagal mengambil data dari Spotify. Pastikan URL valid dan coba lagi.' 
+            error: 'Gagal mengambil data dari Google Lens. Pastikan URL gambar valid dan coba lagi.' 
         });
     }
 }
