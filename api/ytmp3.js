@@ -45,7 +45,7 @@ export default async function handler(req, res) {
     } catch (error1) {
       console.log('First method failed:', error1.message);
       
-      // If first method fails, try second method
+      // If first method fails, try second method (savetube)
       try {
         console.log('Trying second method (savetube.me)...');
         result = await downloadWithSecondMethod(url);
@@ -228,136 +228,110 @@ async function downloadWithFirstMethod(youtubeUrl, userFormat = 'audio') {
   };
 }
 
-// Second download method (savetube.me)
+// Second download method (savetube.me) - Modified without crypto
 async function downloadWithSecondMethod(youtubeUrl) {
-  class Youtubers {
-    constructor() {
-      this.hex = "C5D58EF67A7584E4A29F6C35BBC4EB12";
-    }
-
-    async uint8(hex) {
-      const pecahan = hex.match(/[\dA-F]{2}/gi);
-      if (!pecahan) throw new Error("Format tidak valid");
-      return new Uint8Array(pecahan.map(h => parseInt(h, 16)));
-    }
-
-    b64Byte(b64) {
-      const bersih = b64.replace(/\s/g, "");
-      const biner = Buffer.from(bersih, 'base64');
-      return new Uint8Array(biner);
-    }
-
-    async key() {
-      const raw = await this.uint8(this.hex);
-      return await crypto.subtle.importKey("raw", raw, { name: "AES-CBC" }, false, ["decrypt"]);
-    }
-
-    async Data(base64Terenkripsi) {
-      const byteData = this.b64Byte(base64Terenkripsi);
-      if (byteData.length < 16) throw new Error("Data terlalu pendek");
-
-      const iv = byteData.slice(0, 16);
-      const data = byteData.slice(16);
-
-      const kunci = await this.key();
-      const hasil = await crypto.subtle.decrypt(
-        { name: "AES-CBC", iv },
-        kunci,
-        data
-      );
-
-      const teks = new TextDecoder().decode(new Uint8Array(hasil));
-      return JSON.parse(teks);
-    }
-
-    async getCDN() {
-      let retries = 5
-      while (retries--) {
-        try {
-          const res = await fetch("https://media.savetube.me/api/random-cdn")
-          const data = await res.json()
-          if (data?.cdn) return data.cdn
-        } catch {}
+  try {
+    // Get random CDN
+    let cdn = '';
+    let retries = 5;
+    
+    while (retries--) {
+      try {
+        const res = await fetch("https://media.savetube.me/api/random-cdn");
+        const data = await res.json();
+        if (data?.cdn) {
+          cdn = data.cdn;
+          break;
+        }
+      } catch (error) {
+        if (retries === 0) throw new Error("Gagal ambil CDN setelah 5 percobaan");
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
-      throw new Error("Gagal ambil CDN setelah 5 percobaan")
     }
 
-    async infoVideo(linkYoutube) {
-      const cdn = await this.getCDN();
-      const res = await fetch(`https://${cdn}/v2/info`, {
+    if (!cdn) {
+      throw new Error("Tidak dapat mendapatkan CDN");
+    }
+
+    // Get video info using cloudscraper to bypass protection
+    let infoResponse;
+    try {
+      infoResponse = await cloudscraper.post({
+        uri: `https://${cdn}/v2/info`,
+        form: { url: youtubeUrl },
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': `https://${cdn}`,
+          'Referer': `https://${cdn}/`
+        }
+      });
+    } catch (error) {
+      // Fallback to regular fetch if cloudscraper fails
+      infoResponse = await fetch(`https://${cdn}/v2/info`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: linkYoutube }),
+        body: JSON.stringify({ url: youtubeUrl }),
+      }).then(r => r.text());
+    }
+
+    const infoData = typeof infoResponse === 'string' ? JSON.parse(infoResponse) : infoResponse;
+    
+    if (!infoData.status) {
+      throw new Error(infoData.message || "Gagal ambil data video");
+    }
+
+    // Extract video key from response (no decryption needed)
+    const videoKey = infoData.data?.key;
+    if (!videoKey) {
+      throw new Error("Kunci video tidak ditemukan");
+    }
+
+    // Get download link
+    let downloadResponse;
+    try {
+      downloadResponse = await cloudscraper.post({
+        uri: `https://${cdn}/download`,
+        form: {
+          downloadType: 'audio',
+          quality: '128',
+          key: videoKey,
+        },
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': `https://${cdn}`,
+          'Referer': `https://${cdn}/`
+        }
       });
-
-      const hasil = await res.json();
-      if (!hasil.status) throw new Error(hasil.message||"Gagal ambil data video");
-
-      const isi = await this.Data(hasil.data);
-      return {
-        judul: isi.title,
-        durasi: isi.durationLabel,
-        thumbnail: isi.thumbnail,
-        kode: isi.key
-      };
+    } catch (error) {
+      // Fallback to regular fetch
+      downloadResponse = await fetch(`https://${cdn}/download`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          downloadType: 'audio',
+          quality: '128',
+          key: videoKey,
+        }),
+      }).then(r => r.text());
     }
 
-    async getDownloadLink(kodeVideo, kualitas) {
-      let retries = 5
-      while (retries--) {
-        try {
-          const cdn = await this.getCDN()
-          const res = await fetch(`https://${cdn}/download`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body = JSON.stringify({
-              downloadType: 'audio',
-              quality: kualitas,
-              key: kodeVideo,
-            }),
-          })
-
-          const json = await res.json()
-          if (json?.status && json?.data?.downloadUrl) {
-            return json.data.downloadUrl
-          }
-        } catch {}
-      }
-      throw new Error("Gagal ambil link unduh setelah 5 percobaan")
+    const downloadData = typeof downloadResponse === 'string' ? JSON.parse(downloadResponse) : downloadResponse;
+    
+    if (!downloadData.status || !downloadData.data?.downloadUrl) {
+      throw new Error(downloadData.message || "Gagal mendapatkan link download");
     }
 
-    async downloadAudio(linkYoutube, kualitas = '128') {
-      try {
-        const data = await this.infoVideo(linkYoutube);
-        const linkUnduh = await this.getDownloadLink(data.kode, kualitas);
-        return {
-          status: true,
-          judul: data.judul,
-          durasi: data.durasi,
-          url: linkUnduh,
-        };
-      } catch (err) {
-        return {
-          status: false,
-          pesan: err.message
-        };
-      }
-    }
+    return {
+      title: infoData.data?.title || "YouTube Audio",
+      downloadUrl: downloadData.data.downloadUrl,
+      format: 'mp3',
+      quality: '128kbps'
+    };
+    
+  } catch (error) {
+    console.error('Savetube error:', error);
+    throw new Error(`Savetube method failed: ${error.message}`);
   }
-
-  const yt = new Youtubers();
-  const result = await yt.downloadAudio(youtubeUrl, '128');
-  
-  if (!result.status) {
-    throw new Error(result.pesan);
-  }
-  
-  return {
-    title: result.judul,
-    downloadUrl: result.url,
-    format: 'mp3',
-    quality: '128kbps'
-  };
 }
 
 // Third download method (cloudscraper)
