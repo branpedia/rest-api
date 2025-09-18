@@ -112,15 +112,21 @@ export default async function handler(request, response) {
         return response.status(405).json({ success: false, error: 'Method not allowed' });
     }
 
-    const { url, retry = 0 } = request.query;
+    const { url, imageUrl, retry = 0 } = request.query;
 
-    if (!url) {
-        return response.status(400).json({ success: false, error: 'Parameter URL diperlukan' });
+    // Menerima parameter url atau imageUrl
+    const imageUrlParam = url || imageUrl;
+
+    if (!imageUrlParam) {
+        return response.status(400).json({ 
+            success: false, 
+            error: 'Parameter URL diperlukan. Gunakan parameter "url" atau "imageUrl".' 
+        });
     }
 
     try {
         // Validate image URL
-        if (!url.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i)) {
+        if (!imageUrlParam.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i)) {
             return response.status(400).json({ 
                 success: false, 
                 error: 'URL tidak valid. Pastikan URL mengarah ke gambar (jpg, png, gif, webp, bmp).' 
@@ -128,7 +134,7 @@ export default async function handler(request, response) {
         }
 
         // Search image using Google Lens
-        const rawData = await lens.searchByImage(url);
+        const rawData = await lens.searchByImage(imageUrlParam);
         const processedData = await lens.processResults(rawData);
 
         return response.status(200).json(processedData);
