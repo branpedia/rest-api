@@ -1,66 +1,100 @@
 import cloudscraper from 'cloudscraper';
-import puuter from 'puuter';
 import { JSDOM } from 'jsdom';
+import puppeteer from 'puppeteer';
 
-const s = {
-    tools: {
-        async hit(description, url, options, returnType = 'text') {
-            try {
-                const response = await new Promise((resolve, reject) => {
-                    cloudscraper.get({
-                        url,
-                        headers: options.headers || {},
-                        gzip: true
-                    }, (err, res, body) => {
-                        if (err) reject(err);
-                        else resolve({ res, body });
-                    });
-                });
+export default async function handler(request, response) {
+    // Set CORS headers
+    response.setHeader('Access-Control-Allow-Credentials', true);
+    response.setHeader('Access-Control-Allow-Origin', '*');
+    response.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    response.setHeader(
+        'Access-Control-Allow-Headers',
+        'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+    );
 
-                const { res, body } = response;
-                if (res.statusCode !== 200) {
-                    throw new Error(`${res.statusCode} ${res.statusMessage}\n${body || '(response body kosong)'}`);
-                }
+    // Handle OPTIONS request for CORS
+    if (request.method === 'OPTIONS') {
+        response.status(200).end();
+        return;
+    }
 
-                if (returnType === 'text') {
-                    return { data: body, response: res };
-                } else if (returnType === 'dom') {
-                    const dom = new JSDOM(body, { runScripts: "dangerously", resources: "usable" });
-                    await puuter.until(() => {
-                        const descDetail = dom.window.document.querySelector('p.desc-detail');
-                        const clipSpan = dom.window.document.querySelector('span.detail-extra-span');
-                        return descDetail && clipSpan;
-                    }, 5000, 500); // Tunggu maks 5 detik, cek tiap 500ms
-                    return { dom, response: res };
-                } else {
-                    throw new Error(`invalid returnType param.`);
-                }
-            } catch (e) {
-                throw new Error(`hit ${description} failed. ${e.message}`);
-            }
+    // Only allow GET requests
+    if (request.method !== 'GET') {
+        return response.status(405).json({ success: false, error: 'Method not allowed' });
+    }
+
+    const { url, retry = 0 } = request.query;
+
+    if (!url) {
+        return response.status(400).json({ success: false, error: 'Parameter URL diperlukan' });
+    }
+
+    // Validate CapCut URL
+    if (!url.includes('capcut.com') || !url.includes('/tv2/')) {
+        return response.status(400).json({ success: false, error: 'URL tidak valid. Pastikan URL dari CapCut dan berisi /tv2/' });
+    }
+
+    let html = '';
+    let browser;
+
+    try {
+        console.log(`[TRY ${parseInt(retry) + 1}] Fetching with cloudscraper...`);
+        html = await new Promise((resolve, reject) => {
+            cloudscraper.get({
+                url,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36'
+                },
+                timeout: 10000
+            }, (err, res, body) => {
+                if (err) reject(err);
+                else if (res.statusCode !== 200) reject(new Error(`Status ${res.statusCode}`));
+                else resolve(body);
+            });
+        });
+    } catch (error) {
+        console.log('☁️ Cloudscraper failed, trying with Puppeteer...');
+        
+        try {
+            browser = await puppeteer.launch({
+                headless: true,
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--disable-gpu'
+                ]
+            });
+
+            const page = await browser.newPage();
+            await page.setUserAgent('Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36');
+            await page.setViewport({ width: 390, height: 844 }); // Mobile viewport
+
+            await page.goto(url, {
+                waitUntil: 'networkidle2',
+                timeout: 30000
+            });
+
+            // Tunggu sampai elemen penting muncul
+            await page.waitForSelector('p.desc-detail, span.detail-extra-span, h1.template-title', {
+                timeout: 10000
+            });
+
+            html = await page.content();
+            await browser.close();
+            browser = null;
+
+        } catch (puppeteerError) {
+            if (browser) await browser.close();
+            throw puppeteerError;
         }
-    },
+    }
 
-    get baseUrl() {
-        return 'https://www.capcut.com';
-    },
-
-    get baseHeaders() {
-        return {
-            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'accept-language': 'en-US,en;q=0.5',
-            'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36',
-            'upgrade-insecure-requests': '1',
-            'sec-fetch-dest': 'document',
-            'sec-fetch-mode': 'navigate',
-            'sec-fetch-site': 'none',
-            'sec-fetch-user': '?1',
-        }
-    },
-
-    async scrapePage(url) {
-        const { dom } = await this.tools.hit('CapCut page', url, { headers: this.baseHeaders }, 'dom');
-
+    try {
+        const dom = new JSDOM(html, { runScripts: "dangerously" });
         const doc = dom.window.document;
 
         // 1. Creator
@@ -87,75 +121,39 @@ const s = {
         const clipEl = doc.querySelector('span.detail-extra-span');
         const clipInfo = clipEl ? clipEl.textContent.trim() : "Clip info not found";
 
-        return {
-            creator,
-            title,
-            info,
-            videoSrc,
-            hashtags,
-            clipInfo
-        };
-    },
-
-    async download(url) {
-        const data = await this.scrapePage(url);
-        return data;
-    }
-};
-
-export default async function handler(request, response) {
-    // Set CORS headers
-    response.setHeader('Access-Control-Allow-Credentials', true);
-    response.setHeader('Access-Control-Allow-Origin', '*');
-    response.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    response.setHeader(
-        'Access-Control-Allow-Headers',
-        'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-    );
-
-    // Handle OPTIONS request for CORS
-    if (request.method === 'OPTIONS') {
-        response.status(200).end();
-        return;
-    }
-
-    // Only allow GET requests
-    if (request.method !== 'GET') {
-        return response.status(405).json({ success: false, error: 'Method not allowed' });
-    }
-
-    const { url } = request.query;
-
-    if (!url) {
-        return response.status(400).json({ success: false, error: 'Parameter URL diperlukan' });
-    }
-
-    try {
-        // Validate CapCut URL
-        if (!url.includes('capcut.com') || !url.includes('/tv2/')) {
-            return response.status(400).json({ success: false, error: 'URL tidak valid. Pastikan URL dari CapCut dan berisi /tv2/' });
-        }
-
-        // Scrape data
-        const result = await s.download(url);
-
         return response.status(200).json({
             success: true,
             data: {
-                creator: result.creator,
-                title: result.title,
-                info: result.info,
-                videoUrl: result.videoSrc,
-                hashtags: result.hashtags,
-                clipInfo: result.clipInfo
+                creator,
+                title,
+                info,
+                videoUrl: videoSrc,
+                hashtags,
+                clipInfo
             }
         });
 
-    } catch (error) {
-        console.error('Error fetching CapCut data:', error);
-        return response.status(500).json({
-            success: false,
-            error: 'Gagal mengambil data dari CapCut. Coba lagi nanti.'
-        });
+    } catch (parseError) {
+        console.error('❌ Parsing error:', parseError.message);
+        throw parseError;
     }
+} catch (error) {
+    console.error('🔥 Fatal error:', error);
+
+    // Cleanup browser if exists
+    if (browser) {
+        try { await browser.close(); } catch {}
+    }
+
+    // Retry logic — max 2 retries
+    if (retry < 2) {
+        console.log(`🔁 Retrying... (${parseInt(retry) + 1}/2)`);
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Tunggu 2 detik
+        return handler({ ...request, query: { ...request.query, retry: parseInt(retry) + 1 } }, response);
+    }
+
+    return response.status(500).json({
+        success: false,
+        error: 'Gagal mengambil data dari CapCut. Server mungkin overload atau URL tidak valid. Coba lagi nanti.'
+    });
 }
