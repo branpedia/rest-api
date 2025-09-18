@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const { url, format = 'audio' } = req.query;
+  const { url, format = 'audio', retry = 0 } = req.query;
 
   if (!url) {
     return res.status(400).json({ success: false, error: 'URL parameter is required' });
@@ -34,20 +34,28 @@ export default async function handler(req, res) {
 
     let result;
     
-    // Try first method (ytmp3.wf)
+    // Try multiple methods with fallback - SSVID sebagai metode pertama
     try {
-      console.log('Trying first method (ytmp3.wf)...');
-      result = await downloadWithFirstMethod(url, format);
+      console.log('Trying first method (ssvid)...');
+      result = await downloadWithThirdMethod(url);
     } catch (error1) {
-      console.log('First method failed:', error1.message);
+      console.log('First method (ssvid) failed:', error1.message);
       
-      // If first method fails, try second method
+      // Jika SSVID gagal, coba metode ytmp3.wf
       try {
-        console.log('Trying second method (savetube.me)...');
-        result = await downloadWithSecondMethod(url);
+        console.log('Trying second method (ytmp3.wf)...');
+        result = await downloadWithFirstMethod(url, format);
       } catch (error2) {
         console.log('Second method failed:', error2.message);
-        throw new Error('All download methods failed');
+        
+        // Jika ytmp3.wf gagal, coba metode savetube.me
+        try {
+          console.log('Trying third method (savetube.me)...');
+          result = await downloadWithSecondMethod(url);
+        } catch (error3) {
+          console.log('Third method failed:', error3.message);
+          throw new Error('All download methods failed');
+        }
       }
     }
 
@@ -58,6 +66,14 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Error:', error.message);
+    
+    // Retry logic
+    if (retry < 3) {
+      // Wait for 1 second before retrying
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return handler({ ...req, query: { ...req.query, retry: parseInt(retry) + 1 } }, res);
+    }
+    
     return res.status(500).json({ 
       success: false, 
       error: error.message || 'Failed to download audio' 
@@ -330,4 +346,81 @@ async function downloadWithSecondMethod(youtubeUrl) {
     format: 'mp3',
     quality: '128kbps'
   };
+}
+
+// Third download method (ssvid) - sekarang menjadi metode pertama
+async function downloadWithThirdMethod(youtubeUrl) {
+  try {
+    // STEP 1: SEARCH - Get video info
+    const searchResponse = await fetch('https://ssvid.net/api/ajaxSearch/index', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Origin': 'https://ssvid.net',
+        'Referer': 'https://ssvid.net/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      },
+      body: `query=${encodeURIComponent(youtubeUrl)}`
+    });
+
+    if (!searchResponse.ok) {
+      throw new Error(`HTTP error! status: ${searchResponse.status}`);
+    }
+
+    const searchData = await searchResponse.json();
+
+    if (!searchData || !searchData.vid) {
+      throw new Error('Video tidak ditemukan di ssvid.net');
+    }
+
+    // Get token for m4a (fallback to mp3 if not available)
+    let format = "m4a";
+    let token = searchData?.links?.m4a?.["140"]?.k;
+
+    if (!token) {
+      format = "mp3";
+      token = searchData?.links?.mp3?.mp3128?.k;
+    }
+
+    if (!token) {
+      throw new Error("Token konversi untuk M4A/MP3 tidak ditemukan.");
+    }
+
+    const vid = searchData.vid;
+
+    // STEP 2: CONVERT - Get download link
+    const convertResponse = await fetch('https://ssvid.net/api/ajaxConvert/convert', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Origin': 'https://ssvid.net',
+        'Referer': 'https://ssvid.net/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      },
+      body: `vid=${vid}&k=${token}`
+    });
+
+    if (!convertResponse.ok) {
+      throw new Error(`HTTP error! status: ${convertResponse.status}`);
+    }
+
+    const convertData = await convertResponse.json();
+    
+    if (!convertData || !convertData.dlink) {
+      throw new Error("Download link tidak ditemukan.");
+    }
+
+    return {
+      title: searchData.title || "YouTube Audio",
+      downloadUrl: convertData.dlink,
+      format: format,
+      quality: format === "mp3" ? "128kbps" : "140kbps"
+    };
+    
+  } catch (error) {
+    console.error('SSVID conversion error:', error);
+    throw error;
+  }
 }
