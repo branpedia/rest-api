@@ -23,8 +23,8 @@ const scribd = {
         return 'https://www.scribd.com'
     },
     
-    get apiBaseUrl() {
-        return 'https://www.scribd.com'
+    get docDownloaderUrl() {
+        return 'https://docdownloader.com'
     },
 
     get baseHeaders() {
@@ -65,28 +65,90 @@ const scribd = {
             pageCount = parseInt(pageCountMatch[1]);
         }
         
+        // Extract description if available
+        let description = '';
+        const descMatch = data.match(/<meta name="description" content="(.*?)"/);
+        if (descMatch) {
+            description = descMatch[1];
+        }
+        
         return {
             docId,
             title,
+            description,
             pageCount,
             url: scribdUrl
         };
     },
 
-    async getDownloadUrl(docInfo) {
-        // This is a simplified approach - in a real implementation, you might need
-        // to use a service that can handle Scribd's anti-scraping measures
+    async getDownloadUrlFromDocDownloader(scribdUrl) {
+        const docDownloaderApi = `${this.docDownloaderUrl}/api/download`;
         
-        // For demonstration purposes, we'll return a mock response
-        // In a real implementation, you would use a service like:
-        // https://scribddownload.com/ or similar services
-        
-        return {
-            success: true,
-            downloadUrl: `https://scribddownload.com/download/${docInfo.docId}`,
-            info: docInfo,
-            message: "In a real implementation, this would be the actual download URL. You might need to use a third-party service for actual Scribd downloads."
+        const headers = {
+            ...this.baseHeaders,
+            'content-type': 'application/x-www-form-urlencoded',
+            'origin': this.docDownloaderUrl,
+            'referer': `${this.docDownloaderUrl}/`
         };
+        
+        const body = new URLSearchParams({
+            url: scribdUrl,
+            format: 'pdf' // You can change to 'txt' if needed
+        });
+        
+        try {
+            const { data } = await this.tools.hit('doc downloader api', docDownloaderApi, { 
+                method: 'POST',
+                headers,
+                body
+            }, 'json');
+            
+            return data;
+        } catch (error) {
+            console.error('Error from DocDownloader:', error);
+            
+            // Fallback: try to get download link from HTML
+            try {
+                const { data } = await this.tools.hit('doc downloader homepage', this.docDownloaderUrl, { headers });
+                
+                // Extract CSRF token if needed
+                const csrfTokenMatch = data.match(/name="csrf_token" value="(.*?)"/);
+                const csrfToken = csrfTokenMatch ? csrfTokenMatch[1] : '';
+                
+                // Simulate form submission
+                const formHeaders = {
+                    ...headers,
+                    'content-type': 'application/x-www-form-urlencoded',
+                    'referer': this.docDownloaderUrl
+                };
+                
+                const formBody = new URLSearchParams({
+                    url: scribdUrl,
+                    format: 'pdf',
+                    csrf_token: csrfToken
+                });
+                
+                const { data: submitData } = await this.tools.hit('doc downloader submit', `${this.docDownloaderUrl}/download`, {
+                    method: 'POST',
+                    headers: formHeaders,
+                    body: formBody
+                });
+                
+                // Try to extract download link from response
+                const downloadLinkMatch = submitData.match(/<a href="(.*?)".*?class=".*?download-link.*?"/);
+                if (downloadLinkMatch) {
+                    return {
+                        success: true,
+                        download_url: downloadLinkMatch[1],
+                        status: 'success'
+                    };
+                }
+                
+                throw new Error('Tidak dapat menemukan link download dari DocDownloader');
+            } catch (fallbackError) {
+                throw new Error(`DocDownloader error: ${fallbackError.message}`);
+            }
+        }
     },
 
     async download(scribdUrl) {
@@ -94,19 +156,25 @@ const scribd = {
             // Get document information
             const docInfo = await this.getDocumentInfo(scribdUrl);
             
-            // Get download URL (this would be handled by a service in real implementation)
-            const downloadInfo = await this.getDownloadUrl(docInfo);
+            // Get download URL from DocDownloader
+            const downloadInfo = await this.getDownloadUrlFromDocDownloader(scribdUrl);
+            
+            if (!downloadInfo.success && !downloadInfo.download_url) {
+                throw new Error(downloadInfo.message || 'Gagal mendapatkan link download dari DocDownloader');
+            }
             
             return {
                 success: true,
                 data: {
                     documentId: docInfo.docId,
                     title: docInfo.title,
+                    description: docInfo.description,
                     pageCount: docInfo.pageCount,
                     originalUrl: scribdUrl,
-                    downloadUrl: downloadInfo.downloadUrl,
+                    downloadUrl: downloadInfo.download_url,
+                    downloadInfo: downloadInfo,
                     format: 'PDF',
-                    message: downloadInfo.message
+                    timestamp: new Date().toISOString()
                 }
             };
         } catch (error) {
