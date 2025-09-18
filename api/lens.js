@@ -1,92 +1,236 @@
-import express from 'express';
-import axios from 'axios';
+import cloudscraper from 'cloudscraper';
+import { JSDOM } from 'jsdom';
+import puppeteer from 'puppeteer';
 
-const app = express();
-const port = process.env.PORT || 3000;
+// Simple HTTP server tanpa Express
+const http = require('http');
+const url = require('url');
 
-// Middleware
-app.use(express.json());
-
-// API Key SerpApi (ganti dengan key Anda)
-const SERPAPI_KEY = '99a605260e609bb3b58fbe12792cc316686cb7e10e447a38f6bd6360e6b68dbf';
-
-// Endpoint untuk Google Lens search
-app.get('/api/lens', async (req, res) => {
+const server = http.createServer(async (req, res) => {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  // Handle OPTIONS request
+  if (req.method === 'OPTIONS') {
+    res.writeHead(200);
+    res.end();
+    return;
+  }
+  
+  // Only handle GET requests
+  if (req.method !== 'GET') {
+    res.writeHead(405);
+    res.end(JSON.stringify({ success: false, error: 'Method not allowed' }));
+    return;
+  }
+  
+  // Parse URL parameters
+  const parsedUrl = url.parse(req.url, true);
+  const { imageUrl, retry = 0 } = parsedUrl.query;
+  
+  if (!imageUrl) {
+    res.writeHead(400);
+    res.end(JSON.stringify({ success: false, error: 'Parameter imageUrl diperlukan' }));
+    return;
+  }
+  
   try {
-    const { imageUrl, hl = 'en', country = 'us' } = req.query;
-
-    // Validasi parameter
-    if (!imageUrl) {
-      return res.status(400).json({
-        success: false,
-        error: 'Parameter imageUrl diperlukan'
-      });
-    }
-
-    // Validasi URL
+    // Validate URL
     try {
       new URL(imageUrl);
     } catch (error) {
-      return res.status(400).json({
-        success: false,
-        error: 'URL tidak valid'
+      res.writeHead(400);
+      res.end(JSON.stringify({ success: false, error: 'URL tidak valid' }));
+      return;
+    }
+    
+    let html;
+    let browser;
+
+    try {
+      // Use direct approach with Cloudscraper first
+      const encodedImageUrl = encodeURIComponent(imageUrl);
+      const searchUrl = `https://www.google.com/searchbyimage?image_url=${encodedImageUrl}`;
+      
+      html = await cloudscraper.get({
+        url: searchUrl,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1'
+        }
       });
+    } catch (error) {
+      console.log('Cloudscraper failed, trying with Puppeteer...');
+      
+      // If cloudscraper fails, use Puppeteer
+      browser = await puppeteer.launch({
+        headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-web-security',
+          '--disable-features=IsolateOrigins,site-per-process'
+        ]
+      });
+      
+      const page = await browser.newPage();
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+      await page.setViewport({ width: 1280, height: 800 });
+      
+      // Navigate directly to searchbyimage
+      const encodedImageUrl = encodeURIComponent(imageUrl);
+      await page.goto(`https://www.google.com/searchbyimage?image_url=${encodedImageUrl}`, {
+        waitUntil: 'networkidle2',
+        timeout: 30000
+      });
+      
+      // Wait for results to load
+      await page.waitForTimeout(5000);
+      
+      html = await page.content();
+      if (browser) await browser.close();
     }
 
-    // Build SerpApi URL
-    const serpApiUrl = 'https://serpapi.com/search.json';
-    const params = {
-      engine: 'google_lens',
-      url: imageUrl,
-      hl: hl,
-      country: country,
-      api_key: SERPAPI_KEY
-    };
+    // Parse the HTML with JSDOM
+    const dom = new JSDOM(html);
+    const document = dom.window.document;
 
-    // Make request to SerpApi
-    const response = await axios.get(serpApiUrl, { params });
-    const data = response.data;
+    // Extract related searches
+    const relatedSearches = [];
+    
+    // Method 1: Look for search result links
+    const searchResultElements = document.querySelectorAll('a[href*="/search"]');
+    for (const element of searchResultElements) {
+      const titleElement = element.querySelector('.I9S4yc, .Yt787, .UAiK1e, h3, .DKV0Md');
+      if (titleElement) {
+        const title = titleElement.textContent.trim();
+        const href = element.getAttribute('href');
+        
+        // Extract the actual URL from Google's redirect
+        let actualUrl = null;
+        if (href && href.includes('/url?')) {
+          const urlParams = new URLSearchParams(href.split('/url?')[1]);
+          actualUrl = urlParams.get('url');
+        }
+        
+        relatedSearches.push({
+          title,
+          url: actualUrl || href
+        });
+      }
+    }
+    
+    // Method 2: Look for image result links (alternative approach)
+    if (relatedSearches.length === 0) {
+      const imageResultElements = document.querySelectorAll('.Kg0xqe.sjVJQd, .g, .rc, .tF2Cxc');
+      for (const element of imageResultElements) {
+        const titleElement = element.querySelector('.I9S4yc, .Yt787, .UAiK1e, h3, .DKV0Md, .LC20lb');
+        const linkElement = element.querySelector('a');
+        
+        if (titleElement && linkElement) {
+          const title = titleElement.textContent.trim();
+          const href = linkElement.getAttribute('href');
+          
+          // Extract the actual URL from Google's redirect
+          let actualUrl = null;
+          if (href && href.includes('/url?')) {
+            const urlParams = new URLSearchParams(href.split('/url?')[1]);
+            actualUrl = urlParams.get('url');
+          }
+          
+          relatedSearches.push({
+            title,
+            url: actualUrl || href
+          });
+        }
+      }
+    }
+    
+    // Method 3: Look for "Buka" links specifically
+    const openLinks = document.querySelectorAll('a[class*="umNKYc"], a[href*="/url"]');
+    for (const element of openLinks) {
+      const titleElement = element.closest('.g, .tF2Cxc, .MjjYud')?.querySelector('.LC20lb, .DKV0Md, h3');
+      if (titleElement) {
+        const title = titleElement.textContent.trim();
+        const href = element.getAttribute('href');
+        
+        // Extract the actual URL from Google's redirect
+        let actualUrl = null;
+        if (href && href.includes('/url?')) {
+          const urlParams = new URLSearchParams(href.split('/url?')[1]);
+          actualUrl = urlParams.get('url');
+        }
+        
+        relatedSearches.push({
+          title,
+          url: actualUrl || href
+        });
+      }
+    }
+    
+    // Remove duplicates
+    const uniqueSearches = relatedSearches.filter((search, index, self) =>
+      index === self.findIndex(s => s.title === search.title && s.url === search.url)
+    );
 
-    // Format response
-    const result = {
+    // Extract main image
+    const mainImageElement = document.querySelector('.VeBrne, img[alt*="Image result"], .J9sbhc img');
+    const mainImage = mainImageElement ? mainImageElement.src : null;
+
+    // Extract search URL
+    const searchUrl = dom.window.location.href;
+
+    // Send response
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
       success: true,
       data: {
-        search_metadata: data.search_metadata,
-        search_parameters: data.search_parameters,
-        visual_matches: data.visual_matches || [],
-        related_content: data.related_content || [],
-        google_lens_url: data.search_metadata?.google_lens_url
+        searchUrl,
+        mainImage,
+        relatedSearches: uniqueSearches.slice(0, 10) // Limit to 10 results
       }
-    };
-
-    res.json(result);
+    }));
 
   } catch (error) {
-    console.error('Error fetching from SerpApi:', error);
+    console.error('Error fetching Google Lens data:', error);
     
-    if (error.response) {
-      // SerpApi returned an error
-      return res.status(error.response.status).json({
-        success: false,
-        error: `SerpApi error: ${error.response.data.error || error.response.statusText}`
-      });
+    // Retry logic
+    if (parseInt(retry) < 2) {
+      console.log(`Retrying... Attempt ${parseInt(retry) + 1}`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Create new URL with retry parameter
+      const newUrl = url.parse(req.url, true);
+      newUrl.query.retry = parseInt(retry) + 1;
+      
+      // Recursive call for retry
+      return server.emit('request', req, res);
     }
     
-    res.status(500).json({
-      success: false,
-      error: 'Gagal mengambil data dari Google Lens'
-    });
+    res.writeHead(500);
+    res.end(JSON.stringify({ 
+      success: false, 
+      error: 'Gagal mengambil data dari Google Lens. Pastikan URL gambar valid dan coba lagi.',
+      details: error.message
+    }));
   }
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', service: 'Google Lens API' });
-});
-
-// Start server
-app.listen(port, () => {
+const port = process.env.PORT || 3000;
+server.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
 
-export default app;
+// Handle graceful shutdown
+process.on('SIGINT', () => {
+  console.log('Shutting down gracefully...');
+  server.close(() => {
+    process.exit(0);
+  });
+});
