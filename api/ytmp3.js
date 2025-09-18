@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const { url, format = 'audio', retry = 0 } = req.query;
+  const { url, format = 'audio' } = req.query;
 
   if (!url) {
     return res.status(400).json({ success: false, error: 'URL parameter is required' });
@@ -34,31 +34,20 @@ export default async function handler(req, res) {
 
     let result;
     
-    // Try multiple methods with fallback - SSVID sebagai metode pertama
+    // Try first method (ytmp3.wf)
     try {
-      console.log('Trying FIRST method (ssvid)...');
-      result = await downloadWithSsvidMethod(url);
-      console.log('SSVID method SUCCESS:', result.title);
+      console.log('Trying first method (ytmp3.wf)...');
+      result = await downloadWithFirstMethod(url, format);
     } catch (error1) {
-      console.log('First method (ssvid) FAILED:', error1.message);
+      console.log('First method failed:', error1.message);
       
-      // Jika SSVID gagal, coba metode ytmp3.wf
+      // If first method fails, try second method
       try {
-        console.log('Trying SECOND method (ytmp3.wf)...');
-        result = await downloadWithFirstMethod(url, format);
-        console.log('Ytmp3.wf method SUCCESS:', result.title);
+        console.log('Trying second method (savetube.me)...');
+        result = await downloadWithSecondMethod(url);
       } catch (error2) {
-        console.log('Second method FAILED:', error2.message);
-        
-        // Jika ytmp3.wf gagal, coba metode savetube.me
-        try {
-          console.log('Trying THIRD method (savetube.me)...');
-          result = await downloadWithSecondMethod(url);
-          console.log('Savetube.me method SUCCESS:', result.title);
-        } catch (error3) {
-          console.log('Third method FAILED:', error3.message);
-          throw new Error('All download methods failed');
-        }
+        console.log('Second method failed:', error2.message);
+        throw new Error('All download methods failed');
       }
     }
 
@@ -68,16 +57,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('FINAL Error:', error.message);
-    
-    // Retry logic
-    if (retry < 3) {
-      console.log(`Retrying... (${parseInt(retry) + 1}/3)`);
-      // Wait for 1 second before retrying
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      return handler({ ...req, query: { ...req.query, retry: parseInt(retry) + 1 } }, res);
-    }
-    
+    console.error('Error:', error.message);
     return res.status(500).json({ 
       success: false, 
       error: error.message || 'Failed to download audio' 
@@ -91,101 +71,7 @@ function isValidYouTubeUrl(url) {
   return pattern.test(url);
 }
 
-// First download method (SSVID) - sekarang metode utama
-async function downloadWithSsvidMethod(youtubeUrl) {
-  try {
-    console.log('Starting SSVID download process...');
-    
-    // STEP 1: SEARCH - Get video info
-    console.log('SSVID: Sending search request...');
-    const searchResponse = await fetch('https://ssvid.net/api/ajaxSearch/index', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Origin': 'https://ssvid.net',
-        'Referer': 'https://ssvid.net/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      },
-      body: `query=${encodeURIComponent(youtubeUrl)}`
-    });
-
-    console.log('SSVID: Search response status:', searchResponse.status);
-    
-    if (!searchResponse.ok) {
-      const errorText = await searchResponse.text();
-      console.log('SSVID: Search error response:', errorText);
-      throw new Error(`HTTP error! status: ${searchResponse.status}`);
-    }
-
-    const searchData = await searchResponse.json();
-    console.log('SSVID: Search data received:', searchData);
-
-    if (!searchData || !searchData.vid) {
-      throw new Error('Video tidak ditemukan di ssvid.net');
-    }
-
-    // Get token for m4a (fallback to mp3 if not available)
-    let format = "m4a";
-    let token = searchData?.links?.m4a?.["140"]?.k;
-
-    if (!token) {
-      format = "mp3";
-      token = searchData?.links?.mp3?.mp3128?.k;
-    }
-
-    if (!token) {
-      console.log('SSVID: No token found for M4A or MP3');
-      throw new Error("Token konversi untuk M4A/MP3 tidak ditemukan.");
-    }
-
-    const vid = searchData.vid;
-    console.log('SSVID: Video ID:', vid, 'Token:', token, 'Format:', format);
-
-    // STEP 2: CONVERT - Get download link
-    console.log('SSVID: Sending convert request...');
-    const convertResponse = await fetch('https://ssvid.net/api/ajaxConvert/convert', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Origin': 'https://ssvid.net',
-        'Referer': 'https://ssvid.net/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      },
-      body: `vid=${vid}&k=${token}`
-    });
-
-    console.log('SSVID: Convert response status:', convertResponse.status);
-    
-    if (!convertResponse.ok) {
-      const errorText = await convertResponse.text();
-      console.log('SSVID: Convert error response:', errorText);
-      throw new Error(`HTTP error! status: ${convertResponse.status}`);
-    }
-
-    const convertData = await convertResponse.json();
-    console.log('SSVID: Convert data received:', convertData);
-    
-    if (!convertData || !convertData.dlink) {
-      throw new Error("Download link tidak ditemukan.");
-    }
-
-    return {
-      title: searchData.title || "YouTube Audio",
-      downloadUrl: convertData.dlink,
-      format: format,
-      quality: format === "mp3" ? "128kbps" : "140kbps",
-      source: "ssvid"
-    };
-    
-  } catch (error) {
-    console.error('SSVID conversion error:', error);
-    throw error;
-  }
-}
-
-// Second download method (ytmp3.wf) - sekarang cadangan pertama
+// First download method (ytmp3.wf)
 async function downloadWithFirstMethod(youtubeUrl, userFormat = 'audio') {
   const yt = {
     get url() {
@@ -228,7 +114,7 @@ async function downloadWithFirstMethod(youtubeUrl, userFormat = 'audio') {
 
       // generate random cookiie
       const cookie = `PHPSESSID=${this.randomCookie}`
-      console.log('Ytmp3.wf: generate random cookie')
+      console.log('generate random cookie')
 
       // client hit mirip axios :v 
       const headers = {
@@ -252,7 +138,7 @@ async function downloadWithFirstMethod(youtubeUrl, userFormat = 'audio') {
 
       // first hit
       const html = await hit('get', `${pathButton}?url=${youtubeUrl}`)
-      console.log(`Ytmp3.wf: button hit`)
+      console.log(`button hit`)
       let m1 = html.match(/data: (.+?)\n\t\t\t\tsuccess/ms)?.[1].replace('},', '}').trim()
       if (f.isVideo) {
         m1 = m1.replace(`$('#height').val()`, f.quality)
@@ -264,7 +150,7 @@ async function downloadWithFirstMethod(youtubeUrl, userFormat = 'audio') {
       headers.origin = this.url.origin,
       headers["x-requested-with"] = "XMLHttpRequest"
       const j2 = await hit('post', pathConvert, new URLSearchParams(payload), 'json')
-      console.log(`Ytmp3.wf: convert hit`)
+      console.log(`convert hit`)
 
       // progress checking
       let j3, fetchCount = 0
@@ -310,12 +196,11 @@ async function downloadWithFirstMethod(youtubeUrl, userFormat = 'audio') {
     title: title,
     downloadUrl: result.dlurl,
     format: userFormat === 'audio' ? 'mp3' : 'mp4',
-    quality: userFormat === 'audio' ? '128kbps' : userFormat,
-    source: "ytmp3.wf"
+    quality: userFormat === 'audio' ? '128kbps' : userFormat
   };
 }
 
-// Third download method (savetube.me) - sekarang cadangan kedua
+// Second download method (savetube.me)
 async function downloadWithSecondMethod(youtubeUrl) {
   class Youtubers {
     constructor() {
@@ -443,7 +328,6 @@ async function downloadWithSecondMethod(youtubeUrl) {
     title: result.judul,
     downloadUrl: result.url,
     format: 'mp3',
-    quality: '128kbps',
-    source: "savetube.me"
+    quality: '128kbps'
   };
 }
