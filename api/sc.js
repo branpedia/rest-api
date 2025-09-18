@@ -81,74 +81,159 @@ const scribd = {
         };
     },
 
-    async getDownloadUrlFromDocDownloader(scribdUrl) {
-        const docDownloaderApi = `${this.docDownloaderUrl}/api/download`;
-        
+    async getDownloadInfoFromDocDownloader(scribdUrl) {
         const headers = {
             ...this.baseHeaders,
-            'content-type': 'application/x-www-form-urlencoded',
             'origin': this.docDownloaderUrl,
             'referer': `${this.docDownloaderUrl}/`
         };
         
-        const body = new URLSearchParams({
+        // First, get the initial page to extract CSRF token and form details
+        const { data: homepageData } = await this.tools.hit('doc downloader homepage', this.docDownloaderUrl, { headers });
+        
+        // Extract CSRF token
+        const csrfTokenMatch = homepageData.match(/name="csrf_token" value="(.*?)"/);
+        const csrfToken = csrfTokenMatch ? csrfTokenMatch[1] : '';
+        
+        // Extract form action URL
+        const formActionMatch = homepageData.match(/<form.*?action="(.*?)".*?method="post"/);
+        const formAction = formActionMatch ? formActionMatch[1] : '/download';
+        
+        // Submit the form with the Scribd URL
+        const formHeaders = {
+            ...headers,
+            'content-type': 'application/x-www-form-urlencoded',
+            'referer': `${this.docDownloaderUrl}/`
+        };
+        
+        const formBody = new URLSearchParams({
             url: scribdUrl,
-            format: 'pdf' // You can change to 'txt' if needed
+            format: 'pdf',
+            csrf_token: csrfToken
         });
         
-        try {
-            const { data } = await this.tools.hit('doc downloader api', docDownloaderApi, { 
+        const formUrl = `${this.docDownloaderUrl}${formAction}`;
+        const { data: formResponse, response: formHttpResponse } = await this.tools.hit(
+            'doc downloader form submit', 
+            formUrl, 
+            {
                 method: 'POST',
-                headers,
-                body
-            }, 'json');
-            
-            return data;
-        } catch (error) {
-            console.error('Error from DocDownloader:', error);
-            
-            // Fallback: try to get download link from HTML
-            try {
-                const { data } = await this.tools.hit('doc downloader homepage', this.docDownloaderUrl, { headers });
+                headers: formHeaders,
+                body: formBody,
+                redirect: 'manual' // Don't automatically follow redirects
+            }
+        );
+        
+        // Check if we got a redirect
+        if (formHttpResponse.status >= 300 && formHttpResponse.status < 400) {
+            const location = formHttpResponse.headers.get('location');
+            if (location) {
+                // Follow the redirect
+                const redirectUrl = location.startsWith('http') ? location : `${this.docDownloaderUrl}${location}`;
+                const { data: redirectData } = await this.tools.hit('doc downloader redirect', redirectUrl, { headers });
                 
-                // Extract CSRF token if needed
-                const csrfTokenMatch = data.match(/name="csrf_token" value="(.*?)"/);
-                const csrfToken = csrfTokenMatch ? csrfTokenMatch[1] : '';
-                
-                // Simulate form submission
-                const formHeaders = {
-                    ...headers,
-                    'content-type': 'application/x-www-form-urlencoded',
-                    'referer': this.docDownloaderUrl
-                };
-                
-                const formBody = new URLSearchParams({
-                    url: scribdUrl,
-                    format: 'pdf',
-                    csrf_token: csrfToken
-                });
-                
-                const { data: submitData } = await this.tools.hit('doc downloader submit', `${this.docDownloaderUrl}/download`, {
-                    method: 'POST',
-                    headers: formHeaders,
-                    body: formBody
-                });
-                
-                // Try to extract download link from response
-                const downloadLinkMatch = submitData.match(/<a href="(.*?)".*?class=".*?download-link.*?"/);
-                if (downloadLinkMatch) {
-                    return {
-                        success: true,
-                        download_url: downloadLinkMatch[1],
-                        status: 'success'
-                    };
-                }
-                
-                throw new Error('Tidak dapat menemukan link download dari DocDownloader');
-            } catch (fallbackError) {
-                throw new Error(`DocDownloader error: ${fallbackError.message}`);
+                // Extract download information from the redirect page
+                return this.extractDownloadInfoFromPage(redirectData, redirectUrl);
             }
         }
+        
+        // If no redirect, try to extract from the form response
+        return this.extractDownloadInfoFromPage(formResponse, formUrl);
+    },
+
+    extractDownloadInfoFromPage(html, pageUrl) {
+        // Check if we're on a waiting page
+        if (html.includes('We are processing your document')) {
+            const positionMatch = html.match(/Position:\s*#(\d+)/);
+            const etaMatch = html.match(/ETA:\s*([^<]+)</);
+            
+            return {
+                status: 'processing',
+                message: 'Document is being processed',
+                position: positionMatch ? parseInt(positionMatch[1]) : null,
+                eta: etaMatch ? etaMatch[1].trim() : null,
+                pageUrl: pageUrl
+            };
+        }
+        
+        // Check if we're on a download page with direct links
+        const pdfLinkMatch = html.match(/<a[^>]*href="([^"]*compress-pdf[^"]*)"[^>]*DOWNLOAD as PDF/);
+        const docxLinkMatch = html.match(/<a[^>]*href="([^"]*pdf-to-word[^"]*)"[^>]*DOWNLOAD as DOCX/);
+        const pptxLinkMatch = html.match(/<a[^>]*href="([^"]*pdf-to-powerpoint[^"]*)"[^>]*DOWNLOAD as PPTX/);
+        
+        if (pdfLinkMatch || docxLinkMatch || pptxLinkMatch) {
+            return {
+                status: 'ready',
+                downloadLinks: {
+                    pdf: pdfLinkMatch ? pdfLinkMatch[1] : null,
+                    docx: docxLinkMatch ? docxLinkMatch[1] : null,
+                    pptx: pptxLinkMatch ? pptxLinkMatch[1] : null
+                },
+                pageUrl: pageUrl
+            };
+        }
+        
+        // Check if we need to solve captcha
+        if (html.includes('h-captcha') || html.includes('g-recaptcha')) {
+            return {
+                status: 'captcha_required',
+                message: 'Captcha needs to be solved manually',
+                pageUrl: pageUrl
+            };
+        }
+        
+        // Default case - unknown page state
+        return {
+            status: 'unknown',
+            message: 'Unable to determine download status',
+            pageUrl: pageUrl
+        };
+    },
+
+    async getFinalDownloadLink(intermediateUrl) {
+        const headers = this.baseHeaders;
+        
+        // Follow the intermediate URL (like compress-pdf.lesv.info)
+        const { data: intermediateData, response: intermediateResponse } = await this.tools.hit(
+            'intermediate service', 
+            intermediateUrl, 
+            { headers, redirect: 'manual' }
+        );
+        
+        // Check if we got a redirect to the final download
+        if (intermediateResponse.status >= 300 && intermediateResponse.status < 400) {
+            const location = intermediateResponse.headers.get('location');
+            if (location && location.includes('/download/')) {
+                return {
+                    finalUrl: location,
+                    needsWait: false
+                };
+            }
+        }
+        
+        // Check if we're on a waiting page
+        if (intermediateData.includes('We are processing your document')) {
+            const etaMatch = intermediateData.match(/ETA:\s*([^<]+)</);
+            const idMatch = intermediateData.match(/id:\s*'([^']+)'/);
+            
+            return {
+                status: 'processing',
+                eta: etaMatch ? etaMatch[1].trim() : 'unknown',
+                processId: idMatch ? idMatch[1] : null,
+                needsWait: true
+            };
+        }
+        
+        // Check for final download link
+        const downloadLinkMatch = intermediateData.match(/<a[^>]*href="([^"]*\/download\/[^"]*)"[^>]*DOWNLOAD/);
+        if (downloadLinkMatch) {
+            return {
+                finalUrl: downloadLinkMatch[1],
+                needsWait: false
+            };
+        }
+        
+        throw new Error('Could not extract final download link from intermediate service');
     },
 
     async download(scribdUrl) {
@@ -156,11 +241,27 @@ const scribd = {
             // Get document information
             const docInfo = await this.getDocumentInfo(scribdUrl);
             
-            // Get download URL from DocDownloader
-            const downloadInfo = await this.getDownloadUrlFromDocDownloader(scribdUrl);
+            // Get download information from DocDownloader
+            const downloadInfo = await this.getDownloadInfoFromDocDownloader(scribdUrl);
             
-            if (!downloadInfo.success && !downloadInfo.download_url) {
-                throw new Error(downloadInfo.message || 'Gagal mendapatkan link download dari DocDownloader');
+            let finalDownloadUrl = null;
+            let status = downloadInfo.status;
+            
+            // If download links are available, try to get the final URL
+            if (downloadInfo.status === 'ready' && downloadInfo.downloadLinks && downloadInfo.downloadLinks.pdf) {
+                try {
+                    const finalLinkInfo = await this.getFinalDownloadLink(downloadInfo.downloadLinks.pdf);
+                    if (finalLinkInfo.finalUrl) {
+                        finalDownloadUrl = finalLinkInfo.finalUrl;
+                        status = 'ready';
+                    } else if (finalLinkInfo.needsWait) {
+                        status = 'processing';
+                    }
+                } catch (error) {
+                    console.warn('Could not get final download link:', error.message);
+                    // Keep the intermediate link as fallback
+                    finalDownloadUrl = downloadInfo.downloadLinks.pdf;
+                }
             }
             
             return {
@@ -171,8 +272,10 @@ const scribd = {
                     description: docInfo.description,
                     pageCount: docInfo.pageCount,
                     originalUrl: scribdUrl,
-                    downloadUrl: downloadInfo.download_url,
+                    status: status,
                     downloadInfo: downloadInfo,
+                    downloadUrl: finalDownloadUrl,
+                    intermediateUrl: downloadInfo.downloadLinks ? downloadInfo.downloadLinks.pdf : null,
                     format: 'PDF',
                     timestamp: new Date().toISOString()
                 }
