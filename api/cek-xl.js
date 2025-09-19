@@ -29,9 +29,11 @@ export default async function handler(request, response) {
     return response.status(400).json({ success: false, error: 'Parameter nomor diperlukan' });
   }
 
-  // Validasi nomor XL/AXIS
-  const nomorRegex = /^(6281[3-9]|6285[7-9]|6287[8-9]|6288[1-9])/;
-  if (!nomorRegex.test(nomor)) {
+  // Validasi nomor telepon Indonesia (lebih fleksibel)
+  const nomorRegex = /^(\+62|62|0)(8(1[3-9]|5[7-9]|7[8-9]|8[1-9]))[0-9]{6,9}$/;
+  const cleanedNumber = nomor.replace(/\D/g, ''); // Hapus karakter non-digit
+  
+  if (!nomorRegex.test(cleanedNumber)) {
     return response.status(400).json({ 
       success: false, 
       error: 'Nomor tidak valid. Pastikan nomor XL/AXIS yang dimasukkan.' 
@@ -45,16 +47,12 @@ export default async function handler(request, response) {
 
     try {
       // First try with cloudscraper
-      const scraper = cloudscraper.defaults({
-        method: 'POST',
-        url: url,
-        formData: { nomor: nomor },
+      html = await cloudscraper.post(url, {
+        form: { nomor: nomor },
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         }
       });
-      
-      html = await scraper;
     } catch (error) {
       console.log('Cloudscraper failed, trying with Puppeteer...');
       
